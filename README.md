@@ -39,13 +39,16 @@ From the project root, using PowerShell:
 
 ```powershell
 cd variant1-range-immediate
-javac -d out (Get-ChildItem src -Recurse -Filter *.java).FullName
+javac -d out (Get-ChildItem ../shared/src,src -Recurse -Filter *.java).FullName
 java -cp out ps1.variant1.Main
 ```
 
 For variants 2, 3, and 4, use `ps1.variant2.Main`, `ps1.variant3.Main`, and
-`ps1.variant4.Main` respectively. Compile each folder
-separately: they each include their own sources and entry point.
+`ps1.variant4.Main` respectively, from the corresponding variant folder.
+Each variant imports common classes from `ps1.shared`, outside its own package.
+The compile command includes both `../shared/src` and the variant's `src` and
+places their compiled classes together in `out`. Keep the shared folder beside
+the four variants; compiling a variant's entry point alone is insufficient.
 
 To use another config file:
 
@@ -91,13 +94,10 @@ loading errors; those are build errors rather than config errors.
 VS Code source roots are configured in `.vscode/settings.json`. After changing
 the layout, reload the editor window if old diagnostics remain.
 
-`shared/src/ps1/shared` is the edit point for common classes. Each variant has its own small
-`src/ps1/variantN/Main.java` and copies of shared source in a distinct `ps1.variantN` package so it can compile independently. Canonical source and tests use `ps1.shared`. Package paths match the source directories, avoiding duplicate class names when the root is opened in an editor.
-After editing common code, refresh the copies:
-
-```powershell
-./scripts/sync-variants.ps1
-```
+Common classes exist once in `shared/src/ps1/shared`. Each variant has a small
+`src/ps1/variantN/Main.java` importing the shared runner. Tests use `ps1.shared`
+so they can access package-private jobs. Edit common classes directly; no copies
+or synchronization step are needed.
 
 Run all checks from the project root:
 
@@ -105,7 +105,7 @@ Run all checks from the project root:
 ./scripts/verify.ps1
 ```
 
-Verification refreshes copies, compiles all four folders separately, runs the two
+Verification compiles each variant with shared source, runs the two
 scheme test sets, and checks the entry points with valid and invalid config files.
 Build output goes into a unique temporary directory. Assertion failures or
 nonzero exit codes fail the verification script.
@@ -116,8 +116,8 @@ Source, four entry points, separate configs, compile instructions, and automated
 checks are present. See `plan.md` for the completeness audit.
 
 The video, presentation slides, performance measurements, and submission ZIP
-remain. Before creating the ZIP, refresh shared copies and include the four
-variant folders with their source, config, and README. Exclude compiled `.class`
+remain. Include `shared` alongside the four variant folders in the ZIP, since
+all four depend on it. Include their source, config, and README. Exclude compiled `.class`
 files and `out` folders. Old root `.class` files are not used by these builds.
 
 For performance analysis, keep `y` and timing boundaries fixed, vary `x`, repeat

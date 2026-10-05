@@ -122,7 +122,7 @@ Keep the rules consistent and reject invalid inputs before starting workers.
 ## Correctness and Performance Verification
 
 Test implementation and packaging were explicitly delegated. Run
-`scripts/verify.ps1` for scheme tests and all four standalone entry points.
+`scripts/verify.ps1` for scheme tests and all four entry points with shared source.
 
 - Compare prime results with known expected results, regardless of output order.
 - Check small limits, perfect squares, uneven divisions, and empty worker ranges.
@@ -145,12 +145,14 @@ Test implementation and packaging were explicitly delegated. Run
 - Build and compilation instructions.
 - Presentation slides analyzing implementation and performance characteristics.
 
-Common source lives in `shared/src/ps1/shared` under package `ps1.shared`. Four independently compilable folders each
-contain `src/ps1/variantN/Main.java`, copies of common source in package
-`ps1.variantN`, `config.txt`, and a README:
+Common source lives in `shared/src/ps1/shared` under package `ps1.shared`. Four variant folders each
+contain `src/ps1/variantN/Main.java` in package `ps1.variantN`, importing common
+classes from `ps1.shared`, plus `config.txt` and a README:
 `variant1-range-immediate`, `variant2-range-buffered`,
 `variant3-divisor-immediate`, and `variant4-divisor-buffered`.
-Run `scripts/sync-variants.ps1` after common edits and before packaging.
+Compile each variant with `shared/src`; the README documents the command.
+There are no source copies or synchronization script. Include `shared` alongside
+the four variant folders when packaging, since it is their common dependency.
 
 ## Completeness Audit
 
@@ -159,14 +161,14 @@ Run `scripts/sync-variants.ps1` after common edits and before packaging.
 - Complete: synchronized shared reporting; immediate or post-search display.
 - Complete: confirmation IDs/timestamps, run start/end timestamps, and elapsed
   durations using `System.nanoTime()`.
-- Complete: compile/run instructions, standalone folder builds, scheme tests,
+- Complete: compile/run instructions, variant builds including shared source, scheme tests,
   and entry point checks for valid/invalid inputs.
 - Verification limitation: candidate-range tests check primes and worker counts,
   not exact composite-candidate coverage. Divisor tests check exact allocation.
   Startup resource failures and worker exception propagation are not covered.
 - Remaining: performance data and analysis, video demonstration, presentation
-  slides, and final submission ZIP. ZIP only the four variant folders after
-  refreshing shared copies; exclude compiled output.
+  slides, and final submission ZIP. ZIP the four variant folders and their
+  required `shared` folder; exclude compiled output.
 - Instructor clarification remains: divisor output attributes confirmation to
   main. Verify whether the instructor expects divisor-worker IDs instead.
 

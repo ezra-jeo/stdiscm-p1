@@ -6,7 +6,7 @@ Requires JDK 21 or newer. No external dependencies.
 From this folder in PowerShell:
 
 ```powershell
-javac -d out (Get-ChildItem src -Recurse -Filter *.java).FullName
+javac -d out (Get-ChildItem ../shared/src,src -Recurse -Filter *.java).FullName
 java -cp out ps1.variant3.Main
 ```
 
@@ -41,5 +41,6 @@ worker IDs; divisor variants report main's ID because main confirms primality.
 If main is interrupted, started workers finish before the failure is reported;
 buffered records are not displayed on that path. JVM resource errors propagate.
 
-Compile this folder separately from the other variants using its own packaged sources.
+This variant imports common classes from `ps1.shared` in the sibling `shared` folder. The compile command includes shared source and this entry point together. Keep `../shared/src` available when compiling; this folder alone is not sufficient.
+
 
