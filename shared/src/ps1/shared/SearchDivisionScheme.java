@@ -1,13 +1,15 @@
+package ps1.shared;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalTime;
 
-class SearchJob implements Runnable {
+class SearchDivisionJob implements Runnable {
     private final int min;
     private final int max;
     private final PrintingScheme printingScheme;
 
-    SearchJob(int min, int max, PrintingScheme printingScheme) {
+    SearchDivisionJob(int min, int max, PrintingScheme printingScheme) {
         this.min = min;
         this.max = max;
         this.printingScheme = printingScheme; // Validated in composing class.
@@ -58,7 +60,8 @@ public class SearchDivisionScheme implements DivisionScheme {
     }
 
     private List<Thread> spawnWorkers() {
-        List<Thread> workers = new ArrayList<Thread>();
+        // Split candidates evenly. First workers get the remainder.
+        List<Thread> workers = new ArrayList<>();
         int candidateCount = searchLimit - 1;
         int countPerWorker = candidateCount / workerCount;
         int remainder = candidateCount % workerCount;
@@ -73,7 +76,7 @@ public class SearchDivisionScheme implements DivisionScheme {
             
             //System.out.println("Thread " + index + " gets " + jobMin + " to " + jobMax);
             
-            workers.add(new Thread(new SearchJob(jobMin, jobMax, this.printingScheme)));
+            workers.add(new Thread(new SearchDivisionJob(jobMin, jobMax, this.printingScheme)));
             nextMin = max + 1;
         }
         return workers;
@@ -82,6 +85,7 @@ public class SearchDivisionScheme implements DivisionScheme {
     @Override
     public void search() throws InterruptedException {
         List<Thread> workers = spawnWorkers();
+        // Start all workers before waiting on any one worker.
         try {
             for (Thread worker : workers) {
                 worker.start();
@@ -125,3 +129,4 @@ public class SearchDivisionScheme implements DivisionScheme {
         }
     }
 }
+

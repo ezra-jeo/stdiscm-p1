@@ -1,0 +1,11 @@
+{
+    "java.project.sourcePaths": [
+        "shared/src",
+        "tests",
+        "variant1-range-immediate/src",
+        "variant2-range-buffered/src",
+        "variant3-divisor-immediate/src",
+        "variant4-divisor-buffered/src"
+    ],
+    "java.project.outputPath": ".java-build"
+}

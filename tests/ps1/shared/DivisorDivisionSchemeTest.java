@@ -1,6 +1,11 @@
+package ps1.shared;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+import java.time.LocalTime;
+import java.util.Map;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -12,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class SearchDivisionSchemeTest {
+public class DivisorDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
     private static final Pattern PRIME = Pattern.compile("found prime number (\\d+)!");
 
@@ -50,8 +55,8 @@ public class SearchDivisionSchemeTest {
     private static void checkSearch(int workers, int limit, Set<Integer> primes) throws Exception {
         for (boolean immediate : new boolean[] {true, false}) {
             PrintingScheme printer = new PrintingScheme(immediate);
-            SearchDivisionScheme scheme = new SearchDivisionScheme(workers, limit, printer);
-            checkWorkerCreation(scheme, workers);
+            DivisorDivisionScheme scheme = new DivisorDivisionScheme(workers, limit, printer);
+
             DivisionScheme division = scheme;
             String duringSearch = capture(division::search);
             if (immediate) {
@@ -66,27 +71,73 @@ public class SearchDivisionSchemeTest {
         }
     }
 
-    // Worker count is an internal contract. Reflection keeps the production
-    // helper private and avoids depending on temporary range debug prints.
-    // This checks creation, not exact coverage of composite candidates.
-    private static void checkWorkerCreation(SearchDivisionScheme scheme, int expected) throws Exception {
-        Method spawn = SearchDivisionScheme.class.getDeclaredMethod("spawnWorkers");
+    // Reflection verifies exact allocation without exposing production internals.
+    private static void checkAllocation(int candidate, int workerCount, int upperLimit) throws Exception {
+        DivisorDivisionScheme scheme = new DivisorDivisionScheme(workerCount, candidate, new PrintingScheme(true));
+        Method spawn = DivisorDivisionScheme.class.getDeclaredMethod("spawnWorkers", int.class);
         spawn.setAccessible(true);
-        Object result = spawn.invoke(scheme);
-        check(result instanceof List<?>, "Worker factory must return a list");
-        List<?> workers = (List<?>) result;
-        check(workers.size() == expected, "Incorrect worker count");
-        for (Object worker : workers) {
-            check(worker instanceof Thread, "Worker is not a Thread");
-            check(((Thread) worker).getState() == Thread.State.NEW,
-                    "Worker factory started a thread prematurely");
+        Map<?, ?> workers = (Map<?, ?>) spawn.invoke(scheme, candidate);
+        check(workers.size() == workerCount, "Incorrect worker count");
+        Field minField = DivisorDivisionJob.class.getDeclaredField("min");
+        Field maxField = DivisorDivisionJob.class.getDeclaredField("max");
+        Field candidateField = DivisorDivisionJob.class.getDeclaredField("candidate");
+        minField.setAccessible(true);
+        maxField.setAccessible(true);
+        candidateField.setAccessible(true);
+        Set<Integer> divisors = new HashSet<>();
+        Set<Object> jobs = new HashSet<>();
+        int smallest = Integer.MAX_VALUE;
+        int largest = 0;
+        for (Map.Entry<?, ?> entry : workers.entrySet()) {
+            check(entry.getKey() instanceof Thread, "Missing thread");
+            check(((Thread) entry.getKey()).getState() == Thread.State.NEW, "Factory started worker");
+            check(entry.getValue() instanceof DivisorDivisionJob, "Missing job");
+            Object job = entry.getValue();
+            check(jobs.add(job), "Jobs shared across workers");
+            check(candidateField.getInt(job) == candidate, "Wrong candidate passed to job");
+            int min = minField.getInt(job);
+            int max = maxField.getInt(job);
+            int size = Math.max(0, max - min + 1);
+            smallest = Math.min(smallest, size);
+            largest = Math.max(largest, size);
+            for (int divisor = min; divisor <= max; divisor++) {
+                check(divisor >= 2 && divisor <= upperLimit, "Divisor out of bounds");
+                check(divisors.add(divisor), "Overlapping divisor ranges");
+            }
+        }
+        check(divisors.size() == upperLimit - 1, "Missing divisors");
+        check(largest - smallest <= 1, "Unbalanced divisor ranges");
+    }
+
+    private static void checkJob(int min, int max, int candidate, boolean expected) throws Exception {
+        DivisorDivisionJob job = new DivisorDivisionJob(min, max, candidate);
+        check(!job.getFoundDivisor(), "Job must begin with no finding");
+        Thread thread = new Thread(job);
+        thread.start();
+        thread.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
+        check(!thread.isAlive(), "Job failed to finish");
+        check(job.getFoundDivisor() == expected, "Incorrect divisor finding for " + candidate);
+    }
+
+    private static void checkAttribution() throws Exception {
+        long coordinatorId = Thread.currentThread().threadId();
+        PrintingScheme printer = new PrintingScheme(false);
+        capture(() -> new DivisorDivisionScheme(3, 5, printer).search());
+        String output = capture(printer::displayBuffer);
+        String[] lines = output.strip().split("\\R");
+        check(lines.length == 3, "Missing prime records");
+        for (String line : lines) {
+            check(line.startsWith("Thread " + coordinatorId + " "), "Prime not attributed to coordinator");
+            int timestamp = line.indexOf(" Timestamp: ");
+            check(timestamp >= 0, "Missing confirmation timestamp");
+            LocalTime.parse(line.substring(timestamp + " Timestamp: ".length()));
         }
     }
 
     private static void invalidInputs() {
         boolean nullRejected = false;
         try {
-            new SearchDivisionScheme(2, 10, null);
+            new DivisorDivisionScheme(2, 10, null);
         } catch (IllegalArgumentException expected) {
             nullRejected = true;
         }
@@ -95,7 +146,7 @@ public class SearchDivisionSchemeTest {
         for (int[] input : cases) {
             boolean rejected = false;
             try {
-                new SearchDivisionScheme(input[0], input[1], new PrintingScheme(true));
+                new DivisorDivisionScheme(input[0], input[1], new PrintingScheme(true));
             } catch (IllegalArgumentException expected) {
                 rejected = true;
             }
@@ -119,7 +170,7 @@ public class SearchDivisionSchemeTest {
         Thread coordinator = new Thread(() -> {
             Thread.currentThread().interrupt();
             try {
-                SearchDivisionScheme.awaitWorkers(List.of(worker));
+                DivisorDivisionScheme.awaitWorkers(Set.of(worker));
                 failure.set(new AssertionError("Interruption was not reported"));
             } catch (InterruptedException expected) {
                 if (worker.isAlive()) failure.set(new AssertionError("Worker still alive when reported"));
@@ -146,40 +197,31 @@ public class SearchDivisionSchemeTest {
         check(failure.get() == null, "Interruption failure: " + failure.get());
     }
 
-    private static void maximumCandidate() throws Exception {
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread worker = new Thread(() -> {
-            try {
-                new SearchJob(Integer.MAX_VALUE, Integer.MAX_VALUE, new PrintingScheme(true)).run();
-            } catch (Throwable error) {
-                failure.set(error);
-            }
-        });
-        worker.setDaemon(true);
-        String output = capture(() -> {
-            worker.start();
-            worker.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
-            check(!worker.isAlive(), "Candidate counter overflowed or worker stalled");
-        });
-        check(failure.get() == null, "Maximum candidate failed: " + failure.get());
-        checkPrimes(output, Set.of(Integer.MAX_VALUE));
-    }
-
     public static void main(String[] args) throws Exception {
         invalidInputs();
-        checkSearch(2, 1, Set.of());
+        checkSearch(3, 1, Set.of());
         checkSearch(5, 2, Set.of(2));
-        checkSearch(2, 7, Set.of(2, 3, 5, 7));
-        checkSearch(2, 6, Set.of(2, 3, 5));
-        checkSearch(3, 10, Set.of(2, 3, 5, 7));
+        checkSearch(3, 5, Set.of(2, 3, 5));
+        checkSearch(1, 10, Set.of(2, 3, 5, 7));
         checkSearch(4, 49, Set.of(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47));
-        checkPrimes(capture(() -> new SearchJob(3, 2, new PrintingScheme(true)).run()), Set.of());
-        DivisionScheme reusable = new SearchDivisionScheme(3, 10, new PrintingScheme(true));
+        checkAllocation(2, 3, 1);
+        checkAllocation(3, 3, 1);
+        checkAllocation(5, 3, 2);
+        checkAllocation(9, 4, 3);
+        checkAllocation(49, 3, 7);
+        checkAllocation(Integer.MAX_VALUE, 3, 46340);
+        checkJob(2, 1, 2, false);
+        checkJob(2, 2, 5, false);
+        checkJob(2, 2, 6, true);
+        checkJob(3, 3, 9, true);
+        checkJob(2, 46340, Integer.MAX_VALUE, false);
+        DivisionScheme reusable = new DivisorDivisionScheme(3, 10, new PrintingScheme(true));
         for (int run = 0; run < 10; run++) {
             checkPrimes(capture(reusable::search), Set.of(2, 3, 5, 7));
         }
+        checkAttribution();
         interruptedWaiting();
-        maximumCandidate();
-        System.out.println("PASS: validation, primes, squares, worker creation, both printing modes, repeated display, empty jobs, repeated searches, interruption, int boundary");
+        System.out.println("PASS: divisor validation, primes, squares, exact allocation, empty jobs, both modes, repeated runs, timestamps, coordinator attribution, interruption, int boundary");
     }
 }
+

@@ -1,3 +1,5 @@
+package ps1.variant4;
+
 public interface DivisionScheme {
     /**
      * Searches using the configuration and printing object supplied at construction.
@@ -8,3 +10,5 @@ public interface DivisionScheme {
      */
     void search() throws InterruptedException;
 }
+
+

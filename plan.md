@@ -42,7 +42,7 @@ create another thread. No separate coordinator thread is needed.
 - Base range size is `(y - 1) / x`; remainder is `(y - 1) % x`.
 - The first remainder-count workers receive one extra candidate each.
 - Start at 2; each subsequent range starts at the previous end plus 1.
-- A zero-size range has end equal to start minus 1 and performs no search.
+- A zero-size job uses the canonical empty range 2–1 and performs no search.
 - Every candidate must be assigned exactly once, with no gaps or overlaps.
 - Workers report confirmed primes directly to the shared printing object.
 
@@ -57,7 +57,8 @@ Example: `y = 10`, `x = 3` produces 2–4, 5–7, and 8–10.
   checks to finish without finding a divisor.
 - Main combines findings and reports confirmed primes.
 - Workers do not own prime collections.
-- Worker reuse versus creation per candidate remains undecided.
+- Create fresh workers and job objects for each candidate. Main retains a
+  thread-to-job map, joins all threads, then reads each job's boolean finding.
 
 ### Printing class
 
@@ -73,7 +74,7 @@ hierarchy. Share one printing object across workers.
 - Protect complete output records and concurrent buffer additions.
 - Keep prime calculations outside the lock.
 - Workers do not maintain duplicate prime collections.
-- Output order may vary. Sorting buffered output remains undecided.
+- Output order may vary. Buffered output retains reporting order without sorting.
 
 Each record contains the prime, reporting thread ID, and timestamp captured when
 the prime is confirmed, not when buffered output is eventually displayed.
@@ -97,23 +98,31 @@ Keep each variant's entry point thin:
 
 ## Validation Contract
 
-Validate both when loading configuration and at the division method boundary.
+Validate when loading configuration and in each configured strategy's constructor.
+Configuration fields are final; `search()` uses those already-validated values.
 Keep the rules consistent and reject invalid inputs before starting workers.
 
 - `x >= 1`.
 - `y >= 1`.
-- `y = 1` is valid: zero candidates and empty worker ranges, but start and end
-  timestamps still appear.
+- `y = 1` is valid: zero candidates, and start and end timestamps still appear.
+  Candidate-range division creates empty workers; divisor division creates no
+  per-candidate batches because there are no candidates.
 - `x > y` is valid: some workers receive empty ranges and do nothing.
 - Detect missing or unreadable configuration and missing or malformed values.
 - Do not silently correct invalid values.
-- Numeric types, supported upper bounds, null handling, and failure messages
-  remain to be specified. Consider overflow and resource limits explicitly.
+- Config uses one `x <integer>` and one `y <integer>` line; blank lines are allowed.
+  Missing keys, duplicate keys, unknown keys, extra tokens, and malformed numbers
+  are rejected. Errors are documented in `README.md`.
+- Both values use positive 32-bit integers, up to `Integer.MAX_VALUE`. Candidate
+  counters and range arithmetic use `long` where an increment can exceed that
+  bound. This numeric limit does not guarantee feasible runtime or thread counts.
+- Null printing dependencies are rejected in strategy constructors. OS thread
+  and memory limits can still cause startup failures.
 
 ## Correctness and Performance Verification
 
-Develop verification together as part of learning; no test implementation is
-delegated yet.
+Test implementation and packaging were explicitly delegated. Run
+`scripts/verify.ps1` for scheme tests and all four standalone entry points.
 
 - Compare prime results with known expected results, regardless of output order.
 - Check small limits, perfect squares, uneven divisions, and empty worker ranges.
@@ -136,15 +145,28 @@ delegated yet.
 - Build and compilation instructions.
 - Presentation slides analyzing implementation and performance characteristics.
 
-The shared-source layout and packaging/build approach remain undecided: preserve
-the modular design while making each variant straightforward to build and run.
+Common source lives in `shared/src/ps1/shared` under package `ps1.shared`. Four independently compilable folders each
+contain `src/ps1/variantN/Main.java`, copies of common source in package
+`ps1.variantN`, `config.txt`, and a README:
+`variant1-range-immediate`, `variant2-range-buffered`,
+`variant3-divisor-immediate`, and `variant4-divisor-buffered`.
+Run `scripts/sync-variants.ps1` after common edits and before packaging.
 
-## Next Decisions
+## Completeness Audit
 
-1. Division interface selected: constructor configuration and parameterless
-   `search()`, with interruption reported after worker cleanup.
-2. Define the result-record representation and printing-class interface.
-3. Choose divisor-worker lifetime and result coordination.
-4. Define config format, numeric limits, and validation messages.
-5. Decide buffered ordering and four-folder packaging.
-6. Implement and review incrementally, then verify and collect performance data.
+- Complete: four variant source folders and thin main entry points.
+- Complete: separate config files, validation, and documented input errors.
+- Complete: synchronized shared reporting; immediate or post-search display.
+- Complete: confirmation IDs/timestamps, run start/end timestamps, and elapsed
+  durations using `System.nanoTime()`.
+- Complete: compile/run instructions, standalone folder builds, scheme tests,
+  and entry point checks for valid/invalid inputs.
+- Verification limitation: candidate-range tests check primes and worker counts,
+  not exact composite-candidate coverage. Divisor tests check exact allocation.
+  Startup resource failures and worker exception propagation are not covered.
+- Remaining: performance data and analysis, video demonstration, presentation
+  slides, and final submission ZIP. ZIP only the four variant folders after
+  refreshing shared copies; exclude compiled output.
+- Instructor clarification remains: divisor output attributes confirmation to
+  main. Verify whether the instructor expects divisor-worker IDs instead.
+
