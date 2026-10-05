@@ -24,10 +24,12 @@ Produce four variants:
 
 ### Division strategies
 
-One `DivisionScheme` interface unifies both implementations. Its search operation
-receives the worker count, inclusive search limit, and shared printing object.
-It can return `void`: results are reported through the printing object.
-Successful return means all search workers have finished.
+One `DivisionScheme` interface unifies both implementations. Each implementation
+receives the worker count, inclusive search limit, and shared printing object
+through its constructor. The interface exposes `void search() throws
+InterruptedException`: results are reported through the printing object.
+Successful return means all search workers have finished. An interruption is
+reported only after all started workers have finished.
 
 Each strategy creates, starts, coordinates, and joins its workers. Coordination
 executes on the application main thread; creating a strategy object does not
@@ -139,7 +141,8 @@ the modular design while making each variant straightforward to build and run.
 
 ## Next Decisions
 
-1. Finalize the division interface signature and failure contract.
+1. Division interface selected: constructor configuration and parameterless
+   `search()`, with interruption reported after worker cleanup.
 2. Define the result-record representation and printing-class interface.
 3. Choose divisor-worker lifetime and result coordination.
 4. Define config format, numeric limits, and validation messages.

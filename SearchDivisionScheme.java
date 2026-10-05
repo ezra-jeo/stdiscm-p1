@@ -1,13 +1,16 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalTime;
 
 class SearchJob implements Runnable {
     private final int min;
     private final int max;
+    private final PrintingScheme printingScheme;
 
-    SearchJob(int min, int max) {
+    SearchJob(int min, int max, PrintingScheme printingScheme) {
         this.min = min;
         this.max = max;
+        this.printingScheme = printingScheme; // Validated in composing class.
     }
 
     @Override
@@ -24,26 +27,34 @@ class SearchJob implements Runnable {
                 }
             }
             if (prime) {
-                System.out.println("Thread " + threadId
-                        + " found prime number " + candidate + "!");
+                LocalTime currTime = LocalTime.now();
+                printingScheme.report("Thread " + threadId 
+                    + " found prime number " + candidate + "!"
+                    + " Timestamp: " + currTime);
             }
         }
     }
 }
 
-public class SearchDivisionScheme {
+public class SearchDivisionScheme implements DivisionScheme {
     private final int workerCount;
     private final int searchLimit;
+    private final PrintingScheme printingScheme;
 
-    public SearchDivisionScheme(int workerCount, int searchLimit) {
+    public SearchDivisionScheme(int workerCount, int searchLimit, PrintingScheme printingScheme) {
         if (workerCount < 1) {
             throw new IllegalArgumentException("Worker count must be at least 1.");
         }
         if (searchLimit < 1) {
             throw new IllegalArgumentException("Search limit must be at least 1.");
         }
+        if (printingScheme == null) {
+            throw new IllegalArgumentException("Printing Scheme cannot be null.");
+        }
+
         this.workerCount = workerCount;
         this.searchLimit = searchLimit;
+        this.printingScheme = printingScheme;
     }
 
     private List<Thread> spawnWorkers() {
@@ -52,19 +63,23 @@ public class SearchDivisionScheme {
         int countPerWorker = candidateCount / workerCount;
         int remainder = candidateCount % workerCount;
         long nextMin = 2;
+        
         for (int index = 0; index < workerCount; index++) {
             int count = countPerWorker + (index < remainder ? 1 : 0);
             long max = nextMin + count - 1;
             // Canonical empty endpoints avoid overflowing after the final int.
             int jobMin = count == 0 ? 2 : (int) nextMin;
             int jobMax = count == 0 ? 1 : (int) max;
-            System.out.println("Thread " + index + " gets " + jobMin + " to " + jobMax);
-            workers.add(new Thread(new SearchJob(jobMin, jobMax)));
+            
+            //System.out.println("Thread " + index + " gets " + jobMin + " to " + jobMax);
+            
+            workers.add(new Thread(new SearchJob(jobMin, jobMax, this.printingScheme)));
             nextMin = max + 1;
         }
         return workers;
     }
 
+    @Override
     public void search() throws InterruptedException {
         List<Thread> workers = spawnWorkers();
         try {

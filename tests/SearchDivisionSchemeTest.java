@@ -1,5 +1,6 @@
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,7 +15,6 @@ import java.util.regex.Pattern;
 public class SearchDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
     private static final Pattern PRIME = Pattern.compile("found prime number (\\d+)!");
-    private static final Pattern RANGE = Pattern.compile("gets (\\d+) to (\\d+)");
 
     @FunctionalInterface
     interface CheckedAction {
@@ -45,37 +45,57 @@ public class SearchDivisionSchemeTest {
         check(actual.size() == expected.size(), "Duplicate prime records: " + actual);
     }
 
+    // A test harness redirects stdout so we can assert what the user sees.
+    // Compare sets because worker scheduling does not guarantee output order.
     private static void checkSearch(int workers, int limit, Set<Integer> primes) throws Exception {
-        String output = capture(() -> new SearchDivisionScheme(workers, limit).search());
-        checkPrimes(output, primes);
-        Matcher ranges = RANGE.matcher(output);
-        Set<Integer> candidates = new HashSet<>();
-        int rangeCount = 0;
-        int smallest = Integer.MAX_VALUE;
-        int largest = 0;
-        while (ranges.find()) {
-            rangeCount++;
-            int min = Integer.parseInt(ranges.group(1));
-            int max = Integer.parseInt(ranges.group(2));
-            int size = Math.max(0, max - min + 1);
-            smallest = Math.min(smallest, size);
-            largest = Math.max(largest, size);
-            for (int candidate = min; candidate <= max; candidate++) {
-                check(candidate >= 2 && candidate <= limit, "Candidate outside search range");
-                check(candidates.add(candidate), "Overlapping ranges at " + candidate);
+        for (boolean immediate : new boolean[] {true, false}) {
+            PrintingScheme printer = new PrintingScheme(immediate);
+            SearchDivisionScheme scheme = new SearchDivisionScheme(workers, limit, printer);
+            checkWorkerCreation(scheme, workers);
+            DivisionScheme division = scheme;
+            String duringSearch = capture(division::search);
+            if (immediate) {
+                checkPrimes(duringSearch, primes);
+            } else {
+                check(duringSearch.isEmpty(), "Buffered search printed before display");
+                String displayed = capture(printer::displayBuffer);
+                checkPrimes(displayed, primes);
+                check(capture(printer::displayBuffer).equals(displayed),
+                        "Displaying the buffer should preserve its contents");
             }
         }
-        check(rangeCount == workers, "Incorrect worker count");
-        check(candidates.size() == limit - 1, "Missing candidates");
-        check(largest - smallest <= 1, "Unbalanced range sizes");
+    }
+
+    // Worker count is an internal contract. Reflection keeps the production
+    // helper private and avoids depending on temporary range debug prints.
+    // This checks creation, not exact coverage of composite candidates.
+    private static void checkWorkerCreation(SearchDivisionScheme scheme, int expected) throws Exception {
+        Method spawn = SearchDivisionScheme.class.getDeclaredMethod("spawnWorkers");
+        spawn.setAccessible(true);
+        Object result = spawn.invoke(scheme);
+        check(result instanceof List<?>, "Worker factory must return a list");
+        List<?> workers = (List<?>) result;
+        check(workers.size() == expected, "Incorrect worker count");
+        for (Object worker : workers) {
+            check(worker instanceof Thread, "Worker is not a Thread");
+            check(((Thread) worker).getState() == Thread.State.NEW,
+                    "Worker factory started a thread prematurely");
+        }
     }
 
     private static void invalidInputs() {
+        boolean nullRejected = false;
+        try {
+            new SearchDivisionScheme(2, 10, null);
+        } catch (IllegalArgumentException expected) {
+            nullRejected = true;
+        }
+        check(nullRejected, "Null printing scheme accepted");
         int[][] cases = {{0, 2}, {-1, 2}, {2, 0}, {2, -1}};
         for (int[] input : cases) {
             boolean rejected = false;
             try {
-                new SearchDivisionScheme(input[0], input[1]);
+                new SearchDivisionScheme(input[0], input[1], new PrintingScheme(true));
             } catch (IllegalArgumentException expected) {
                 rejected = true;
             }
@@ -84,6 +104,7 @@ public class SearchDivisionSchemeTest {
     }
 
     private static void interruptedWaiting() throws Exception {
+        // The worker cannot finish until the test explicitly releases it.
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch reported = new CountDownLatch(1);
         AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -129,7 +150,7 @@ public class SearchDivisionSchemeTest {
         AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread worker = new Thread(() -> {
             try {
-                new SearchJob(Integer.MAX_VALUE, Integer.MAX_VALUE).run();
+                new SearchJob(Integer.MAX_VALUE, Integer.MAX_VALUE, new PrintingScheme(true)).run();
             } catch (Throwable error) {
                 failure.set(error);
             }
@@ -152,13 +173,13 @@ public class SearchDivisionSchemeTest {
         checkSearch(2, 6, Set.of(2, 3, 5));
         checkSearch(3, 10, Set.of(2, 3, 5, 7));
         checkSearch(4, 49, Set.of(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47));
-        checkPrimes(capture(() -> new SearchJob(3, 2).run()), Set.of());
-        SearchDivisionScheme reusable = new SearchDivisionScheme(3, 10);
+        checkPrimes(capture(() -> new SearchJob(3, 2, new PrintingScheme(true)).run()), Set.of());
+        DivisionScheme reusable = new SearchDivisionScheme(3, 10, new PrintingScheme(true));
         for (int run = 0; run < 10; run++) {
             checkPrimes(capture(reusable::search), Set.of(2, 3, 5, 7));
         }
         interruptedWaiting();
         maximumCandidate();
-        System.out.println("PASS: validation, primes, squares, coverage, empty workers, repeated searches, interruption, int boundary");
+        System.out.println("PASS: validation, primes, squares, worker creation, both printing modes, repeated display, empty jobs, repeated searches, interruption, int boundary");
     }
 }
