@@ -66,8 +66,11 @@ Example: `y = 10`, `x = 3` produces 2–4, 5–7, and 8–10.
 Use one class with a mode fixed at instantiation, rather than a printing strategy
 hierarchy. Share one printing object across workers.
 
-- Receive complete confirmed-prime records directly; no collection listener.
-- Immediate mode prints each record when reported.
+- Planned reporting interface: receive a structured map with thread ID,
+  confirmation timestamp, and prime number instead of a preformatted string.
+  Each map represents one prime report; thread IDs are metadata, not unique
+  record keys, since one thread can report multiple primes.
+- Immediate mode prints each prime with its thread ID and timestamp when reported.
 - Buffered mode stores records in the printing object's collection and prints
   them after the entire search finishes.
 - Protect the reporting operation with the same lock for every caller. A
@@ -75,15 +78,17 @@ hierarchy. Share one printing object across workers.
 - Protect complete output records and concurrent buffer additions.
 - Keep prime calculations outside the lock.
 - Workers do not maintain duplicate prime collections.
-- Output order may vary. Buffered output retains reporting order without sorting.
+- Immediate output order may vary. Planned buffered output sorts records by
+  numeric prime value in ascending order, then displays only the prime numbers.
 
 Each record contains the prime, reporting thread ID, and timestamp captured when
 the prime is confirmed, not when buffered output is eventually displayed.
 
 Range division records the confirming worker's ID. Divisor division records
 main's ID because main combines findings and confirms the prime. The assignment
-explicitly requires IDs and timestamps for immediate output; the agreed design
-uses the same record format for both modes. Clarify attribution with the
+explicitly requires IDs and timestamps for immediate output. Planned buffered
+output omits these fields, while retaining them in the structured reports.
+Clarify attribution with the
 instructor if worker IDs specifically are required for divisor division.
 
 ### Main entry points
@@ -106,9 +111,9 @@ Keep the rules consistent and reject invalid inputs before starting workers.
 - `x >= 1`.
 - Planned change: `y >= 0`; negative search limits remain invalid.
 - `y = 0` and `y = 1` are valid empty searches; start and end timestamps
-  still appear. Whether candidate-range division skips worker creation for both
-  empty searches remains undecided. Currently it creates empty workers for 1;
-  divisor division creates no batches when there are no candidates.
+  still appear. Planned behavior: both schemes short-circuit with an early
+  return before creating any workers when the search limit is below 2.
+  Keep `x >= 1` validation even for an empty search.
 - `x > y` is valid: some workers receive empty ranges and do nothing.
 - Detect missing or unreadable configuration and missing or malformed values.
 - Do not silently correct invalid values.
@@ -164,12 +169,21 @@ Compile each variant with `shared/src`; the README documents the command.
 There are no source copies or synchronization script. Include `shared` alongside
 the four variant folders when packaging, since it is their common dependency.
 
-## Completeness Audit
+## Implementation To-Do
 
-- Pending implementation: accept `y = 0` in config and strategy validation;
-  use a nonnegative candidate count; update config/scheme/entry point tests and
-  README error descriptions. Decide empty-search worker creation before changing
-  that lifecycle. Current code and tests still require `y >= 1`.
+1. Accept search limits 0 and 1. Short-circuit both schemes with an early return
+   before spawning workers; preserve run start/end timestamps. Update config and
+   strategy validation, tests, and README errors. Do not treat 0 or 1 as divisors.
+2. Change printing mode 2 (buffered output, variants 2 and 4) to display primes
+   without thread IDs or timestamps. Keep both fields in immediate output.
+3. Replace string reports with maps containing thread ID, confirmation timestamp,
+   and prime number. Sort buffered records numerically by prime before display;
+   do not parse strings or sort numeric values lexicographically. Update both
+   schemes, printing tests, entry point checks, and output documentation.
+
+These are pending changes, not claims that the current code implements them.
+
+## Current Deliverable Status
 
 - Complete: four variant source folders and thin main entry points.
 - Complete: separate config files, validation, and documented input errors.

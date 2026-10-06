@@ -42,13 +42,14 @@ public class SearchDivisionScheme implements DivisionScheme {
     private final int workerCount;
     private final int searchLimit;
     private final PrintingScheme printingScheme;
+    private final long MIN_CANDIDATE = 0;
 
     public SearchDivisionScheme(int workerCount, int searchLimit, PrintingScheme printingScheme) {
         if (workerCount < 1) {
             throw new IllegalArgumentException("Worker count must be at least 1.");
         }
-        if (searchLimit < 1) {
-            throw new IllegalArgumentException("Search limit must be at least 1.");
+        if (searchLimit < MIN_CANDIDATE) {
+            throw new IllegalArgumentException("Search limit must be at least " + MIN_CANDIDATE + ".");
         }
         if (printingScheme == null) {
             throw new IllegalArgumentException("Printing Scheme cannot be null.");
@@ -84,6 +85,10 @@ public class SearchDivisionScheme implements DivisionScheme {
 
     @Override
     public void search() throws InterruptedException {
+        if (searchLimit < 2) {
+           return; // Skips 0 and 1 since they are non primes regardless
+        }
+
         List<Thread> workers = spawnWorkers();
         // Start all workers before waiting on any one worker.
         try {

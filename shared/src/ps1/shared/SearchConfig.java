@@ -7,12 +7,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 public record SearchConfig(int workerCount, int searchLimit) {
+    private static final int MIN_CANDIDATE = 0;
+
     public SearchConfig {
         if (workerCount < 1) {
             throw new IllegalArgumentException("Worker count must be at least 1.");
         }
-        if (searchLimit < 1) {
-            throw new IllegalArgumentException("Search limit must be at least 1.");
+        if (searchLimit < MIN_CANDIDATE) {
+            throw new IllegalArgumentException("Search limit must be at least " + MIN_CANDIDATE + ".");
         }
     }
 

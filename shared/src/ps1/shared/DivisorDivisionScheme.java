@@ -39,13 +39,15 @@ public class DivisorDivisionScheme implements DivisionScheme {
     private final int workerCount;
     private final int searchLimit;
     private final PrintingScheme printingScheme;
+    private final long MIN_CANDIDATE = 0;
+
 
     public DivisorDivisionScheme(int workerCount, int searchLimit, PrintingScheme printingScheme) {
         if (workerCount < 1) {
             throw new IllegalArgumentException("Worker count must be at least 1.");
         }
-        if (searchLimit < 1) {
-            throw new IllegalArgumentException("Search limit must be at least 1.");
+        if (searchLimit < MIN_CANDIDATE) {
+            throw new IllegalArgumentException("Search limit must be at least " + MIN_CANDIDATE + ".");
         }
         if (printingScheme == null) {
             throw new IllegalArgumentException("Printing Scheme cannot be null.");
@@ -61,11 +63,11 @@ public class DivisorDivisionScheme implements DivisionScheme {
         Map<Thread, DivisorDivisionJob> threadMap = new HashMap<>();
 
         int upperLimit = (int) Math.sqrt(candidate);
-        int divisorCount = upperLimit - 1;
+        int divisorCount = upperLimit - 1;// -1 so we don't count 1 as divisor and check of it.
         int countPerWorker = divisorCount / workerCount; // Floors automatically
         int remainder = divisorCount % workerCount;
         long nextMin = 2;
-        
+
         for (int index = 0; index < workerCount; index++) {
             int count = countPerWorker + (index < remainder ? 1 : 0);
             long max = nextMin + count - 1;
@@ -87,7 +89,11 @@ public class DivisorDivisionScheme implements DivisionScheme {
     @Override 
     public void search() throws InterruptedException {
         // Candidates stay sequential; each gets a fresh batch of workers.
-        for (long candidate = 2; candidate <= searchLimit; candidate++) {
+        for (long candidate = MIN_CANDIDATE; candidate <= searchLimit; candidate++) {
+            if (candidate < 2) {
+                continue; // Skips 0 and 1 since they are non primes regardless
+            }
+
             Map<Thread, DivisorDivisionJob> workers = spawnWorkers((int) candidate);
             try {
                 for (Thread worker: workers.keySet()) {
