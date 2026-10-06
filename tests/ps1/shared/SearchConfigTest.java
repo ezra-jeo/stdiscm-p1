@@ -1,0 +1,60 @@
+package ps1.shared;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class SearchConfigTest {
+    private static void check(boolean condition, String message) {
+        if (!condition) {
+            throw new AssertionError(message);
+        }
+    }
+
+    private static void reject(Path config, String contents, String expectedError) throws Exception {
+        Files.writeString(config, contents);
+        try {
+            SearchConfig.load(config);
+            throw new AssertionError("Invalid config accepted: " + contents);
+        } catch (IllegalArgumentException error) {
+            check(error.getMessage().contains(expectedError), "Wrong validation error: " + error.getMessage());
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Path config = Files.createTempFile("ps1-config-validation-", ".txt");
+        try {
+            // Check parsing separately; do not start billions of workers.
+            Files.writeString(config, "x 2147483647\ny 2147483647\n");
+            SearchConfig maximum = SearchConfig.load(config);
+            check(maximum.workerCount() == Integer.MAX_VALUE, "Maximum x rejected or changed");
+            check(maximum.searchLimit() == Integer.MAX_VALUE, "Maximum y rejected or changed");
+
+            Files.writeString(config, "\ny\t1\nx +0003\n\n");
+            SearchConfig small = SearchConfig.load(config);
+            check(small.workerCount() == 3 && small.searchLimit() == 1, "Whitespace/sign parsing failed");
+
+            String[] wrongTypes = {"two", "true", "null", "2.0", "1e3", "0x10", "1_000", "+", "NaN"};
+            String[] overflowValues = {"2147483648", "-2147483649", "9223372036854775807",
+                    "9223372036854775808", "999999999999999999999999999999999999999"};
+            for (String key : new String[] {"x", "y"}) {
+                String other = key.equals("x") ? "y 10\n" : "x 3\n";
+                for (String value : wrongTypes) {
+                    reject(config, other + key + " " + value + "\n", "Config " + key + " on line 2 must be an integer");
+                }
+                for (String value : overflowValues) {
+                    reject(config, other + key + " " + value + "\n", "Config " + key + " on line 2 is outside the 32-bit integer range");
+                }
+                for (String value : new String[] {"0", "-1", "-2147483648"}) {
+                    reject(config, other + key + " " + value + "\n", "must be at least 1");
+                }
+            }
+            reject(config, "x 3\n", "must contain both x and y");
+            reject(config, "x 3\nx 4\ny 10\n", "Duplicate config value: x");
+            reject(config, "x 3\ny\n", "Config line 2 must be");
+            reject(config, "x 3\ny 10 extra\n", "Config line 2 must be");
+        } finally {
+            Files.deleteIfExists(config);
+        }
+        System.out.println("PASS: config data types, positive bounds, int overflow/underflow, huge values, format errors");
+    }
+}

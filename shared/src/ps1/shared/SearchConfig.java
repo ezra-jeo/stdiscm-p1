@@ -32,16 +32,28 @@ public record SearchConfig(int workerCount, int searchLimit) {
             if (values.containsKey(parts[0])) {
                 throw new IllegalArgumentException("Duplicate config value: " + parts[0] + ".");
             }
-            try {
-                values.put(parts[0], Integer.parseInt(parts[1]));
-            } catch (NumberFormatException invalidNumber) {
-                throw new IllegalArgumentException("Config " + parts[0] + " must be a 32-bit integer.", invalidNumber);
-            }
+            values.put(parts[0], parseInteger(parts[0], parts[1], lineNumber));
         }
         if (!values.containsKey("x") || !values.containsKey("y")) {
             throw new IllegalArgumentException("Config must contain both x and y.");
         }
         return new SearchConfig(values.get("x"), values.get("y"));
+    }
+
+    private static int parseInteger(String key, String value, int lineNumber) {
+        // Check the written value before checking if it fits in an int.
+        if (!value.matches("[+-]?[0-9]+")) {
+            throw new IllegalArgumentException("Config " + key + " on line " + lineNumber
+                    + " must be an integer; decimals, text, and other number formats are not allowed.");
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException overflow) {
+            // parseInt rejects overflow instead of wrapping the input value.
+            throw new IllegalArgumentException("Config " + key + " on line " + lineNumber
+                    + " is outside the 32-bit integer range ("
+                    + Integer.MIN_VALUE + " to " + Integer.MAX_VALUE + ").", overflow);
+        }
     }
 }
 

@@ -38,8 +38,9 @@ create another thread. No separate coordinator thread is needed.
 #### Candidate-range division
 
 - Each worker independently checks the candidates in its assigned range.
-- Candidate count is `y - 1`: search from 2 through `y`, since 1 is not prime.
-- Base range size is `(y - 1) / x`; remainder is `(y - 1) % x`.
+- Planned candidate count is `max(0, y - 1)`: search from 2 through `y`,
+  with no candidates when `y` is 0 or 1.
+- Base range size is `candidateCount / x`; remainder is `candidateCount % x`.
 - The first remainder-count workers receive one extra candidate each.
 - Start at 2; each subsequent range starts at the previous end plus 1.
 - A zero-size job uses the canonical empty range 2–1 and performs no search.
@@ -103,19 +104,28 @@ Configuration fields are final; `search()` uses those already-validated values.
 Keep the rules consistent and reject invalid inputs before starting workers.
 
 - `x >= 1`.
-- `y >= 1`.
-- `y = 1` is valid: zero candidates, and start and end timestamps still appear.
-  Candidate-range division creates empty workers; divisor division creates no
-  per-candidate batches because there are no candidates.
+- Planned change: `y >= 0`; negative search limits remain invalid.
+- `y = 0` and `y = 1` are valid empty searches; start and end timestamps
+  still appear. Whether candidate-range division skips worker creation for both
+  empty searches remains undecided. Currently it creates empty workers for 1;
+  divisor division creates no batches when there are no candidates.
 - `x > y` is valid: some workers receive empty ranges and do nothing.
 - Detect missing or unreadable configuration and missing or malformed values.
 - Do not silently correct invalid values.
 - Config uses one `x <integer>` and one `y <integer>` line; blank lines are allowed.
   Missing keys, duplicate keys, unknown keys, extra tokens, and malformed numbers
   are rejected. Errors are documented in `README.md`.
-- Both values use positive 32-bit integers, up to `Integer.MAX_VALUE`. Candidate
+- Config validation distinguishes invalid integer syntax from 32-bit overflow or
+  underflow, identifying the key and line. Zero and negative values that fit in
+  an int are then checked against each field's allowed minimum: 1 for `x`,
+  planned 0 for `y`.
+- Values use 32-bit integers, up to `Integer.MAX_VALUE`. Candidate
   counters and range arithmetic use `long` where an increment can exceed that
   bound. This numeric limit does not guarantee feasible runtime or thread counts.
+- Counter proposal: Java has no primitive unsigned int. Unsigned `Integer`
+  helpers reinterpret int bits but do not prevent increment overflow. Keep the
+  existing long counters for int-bounded inputs unless an alternative endpoint
+  termination strategy is explicitly chosen; no counter changes are implemented.
 - Null printing dependencies are rejected in strategy constructors. OS thread
   and memory limits can still cause startup failures.
 
@@ -155,6 +165,11 @@ There are no source copies or synchronization script. Include `shared` alongside
 the four variant folders when packaging, since it is their common dependency.
 
 ## Completeness Audit
+
+- Pending implementation: accept `y = 0` in config and strategy validation;
+  use a nonnegative candidate count; update config/scheme/entry point tests and
+  README error descriptions. Decide empty-search worker creation before changing
+  that lifecycle. Current code and tests still require `y >= 1`.
 
 - Complete: four variant source folders and thin main entry points.
 - Complete: separate config files, validation, and documented input errors.

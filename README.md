@@ -77,7 +77,8 @@ is rejected before the search starts, so it has no run timestamps.
 | Missing `x` or `y`; empty file | `Config must contain both x and y.` |
 | Repeated key | `Duplicate config value: x.` or `y.` |
 | Unknown key, missing value, extra tokens, or `x=2` format | `Config line N must be x <integer> or y <integer>.` |
-| Decimal, text, or integer outside the 32-bit range | `Config x/y must be a 32-bit integer.` |
+| Decimal, text, scientific notation, or other non-integer format | `Config x/y on line N must be an integer; ...` |
+| Integer outside the 32-bit range, including huge values | `Config x/y on line N is outside the 32-bit integer range (-2147483648 to 2147483647).` |
 | `x < 1` | `Worker count must be at least 1.` |
 | `y < 1` | `Search limit must be at least 1.` |
 | More than one command-line argument | `Usage: java -cp out <variant-main> [config-file]` |
@@ -106,7 +107,7 @@ Run all checks from the project root:
 ```
 
 Verification compiles each variant with shared source, runs the two
-scheme test sets, and checks the entry points with valid and invalid config files.
+scheme test sets and config validation tests, and checks the entry points with valid and invalid config files.
 Build output goes into a unique temporary directory. Assertion failures or
 nonzero exit codes fail the verification script.
 
