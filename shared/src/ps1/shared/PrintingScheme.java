@@ -2,19 +2,22 @@ package ps1.shared;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Comparator;
 
 public class PrintingScheme {
     private final boolean immediate; 
-    private final List<String> messageBuffer;
+    private final List<PrintingSchemeObject> messageBuffer;
 
     public PrintingScheme(boolean immediate) {
         this.immediate = immediate;
-        this.messageBuffer = new ArrayList<String>();
+        this.messageBuffer = new ArrayList<PrintingSchemeObject>();
     }
 
-    public synchronized void report(String message) {
+    public synchronized void report(PrintingSchemeObject message) {
         if (this.immediate) {
-            System.out.println(message);
+            System.out.println("Thread " + message.threadId()
+                    + " found prime number " + message.prime() + "!"
+                    + " Timestamp: " + message.timestamp());
         } else {
             messageBuffer.add(message);
         }
@@ -31,9 +34,9 @@ public class PrintingScheme {
             System.out.println("Error: Immediate mode is used, no buffer is present.");
             return;
         }
-
-        for (String message : messageBuffer) {
-            System.out.println(message);
+        messageBuffer.sort(Comparator.comparing(PrintingSchemeObject::prime));
+        for (PrintingSchemeObject message : messageBuffer) {
+            System.out.println("Found prime " + message.prime() + "!");
         }
     }
 }

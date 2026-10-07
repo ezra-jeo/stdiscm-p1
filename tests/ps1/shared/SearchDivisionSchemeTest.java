@@ -3,6 +3,7 @@ package ps1.shared;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
+import java.time.LocalTime;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -16,7 +17,7 @@ import java.util.regex.Pattern;
 
 public class SearchDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
-    private static final Pattern PRIME = Pattern.compile("found prime number (\\d+)!");
+    private static final Pattern PRIME = Pattern.compile("(?:found prime number |Found prime )(\\d+)!");
 
     @FunctionalInterface
     interface CheckedAction {
@@ -47,13 +48,38 @@ public class SearchDivisionSchemeTest {
         check(actual.size() == expected.size(), "Duplicate prime records: " + actual);
     }
 
-    // A test harness redirects stdout so we can assert what the user sees.
-    // Compare sets because worker scheduling does not guarantee output order.
+    private static void checkBuffered(String output, Set<Integer> expected) {
+        // Exact lines check sorting, formatting, and absence of ID/timestamp.
+        List<String> expectedLines = expected.stream().sorted()
+                .map(prime -> "Found prime " + prime + "!").toList();
+        check(output.lines().toList().equals(expectedLines), "Incorrect buffered output: " + output);
+    }
+
+    private static void checkStructuredReports() throws Exception {
+        LocalTime timestamp = LocalTime.of(12, 34, 56);
+        PrintingSchemeObject report = new PrintingSchemeObject(7, 23, timestamp);
+        PrintingScheme immediate = new PrintingScheme(true);
+        String output = capture(() -> immediate.report(report));
+        check(output.lines().toList().equals(List.of(
+                "Thread 7 found prime number 23! Timestamp: 12:34:56")),
+                "Immediate output did not preserve report fields");
+
+        PrintingScheme buffered = new PrintingScheme(false);
+        check(capture(() -> {
+            buffered.report(report);
+            buffered.report(new PrintingSchemeObject(7, 2, timestamp));
+            buffered.report(new PrintingSchemeObject(8, 11, timestamp));
+        }).isEmpty(), "Buffered reporting printed immediately");
+        // Deliberately out of order; numeric sorting differs from string sorting.
+        checkBuffered(capture(buffered::displayBuffer), Set.of(2, 11, 23));
+    }
+
+    // Compare sets for immediate output; worker scheduling can change order.
     private static void checkSearch(int workers, int limit, Set<Integer> primes) throws Exception {
         for (boolean immediate : new boolean[] {true, false}) {
             PrintingScheme printer = new PrintingScheme(immediate);
             SearchDivisionScheme scheme = new SearchDivisionScheme(workers, limit, printer);
-            checkWorkerCreation(scheme, workers);
+            if (limit >= 2) checkWorkerCreation(scheme, workers);
             DivisionScheme division = scheme;
             String duringSearch = capture(division::search);
             if (immediate) {
@@ -62,6 +88,7 @@ public class SearchDivisionSchemeTest {
                 check(duringSearch.isEmpty(), "Buffered search printed before display");
                 String displayed = capture(printer::displayBuffer);
                 checkPrimes(displayed, primes);
+                checkBuffered(displayed, primes);
                 check(capture(printer::displayBuffer).equals(displayed),
                         "Displaying the buffer should preserve its contents");
             }
@@ -93,7 +120,7 @@ public class SearchDivisionSchemeTest {
             nullRejected = true;
         }
         check(nullRejected, "Null printing scheme accepted");
-        int[][] cases = {{0, 2}, {-1, 2}, {2, 0}, {2, -1}};
+        int[][] cases = {{0, 2}, {-1, 2}, {2, -1}};
         for (int[] input : cases) {
             boolean rejected = false;
             try {
@@ -169,6 +196,8 @@ public class SearchDivisionSchemeTest {
 
     public static void main(String[] args) throws Exception {
         invalidInputs();
+        checkStructuredReports();
+        checkSearch(3, 0, Set.of());
         checkSearch(2, 1, Set.of());
         checkSearch(5, 2, Set.of(2));
         checkSearch(2, 7, Set.of(2, 3, 5, 7));
@@ -185,4 +214,5 @@ public class SearchDivisionSchemeTest {
         System.out.println("PASS: validation, primes, squares, worker creation, both printing modes, repeated display, empty jobs, repeated searches, interruption, int boundary");
     }
 }
+
 

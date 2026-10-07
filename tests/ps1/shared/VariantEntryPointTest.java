@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 
 public class VariantEntryPointTest {
     private static final long TIMEOUT_SECONDS = 10;
-    private static final Pattern PRIME = Pattern.compile("found prime number (\\d+)!");
+    private static final Pattern PRIME = Pattern.compile("(?:found prime number |Found prime )(\\d+)!");
 
     private static void check(boolean condition, String message) {
         if (!condition) {
@@ -51,6 +51,12 @@ public class VariantEntryPointTest {
                 check(actual.add(Integer.parseInt(records.group(1))), "Duplicate prime");
             }
             check(actual.equals(expected), "Wrong primes: " + actual);
+            if (variant.equals("variant2") || variant.equals("variant4")) {
+                String primeOutput = output.substring(output.indexOf("\n", start) + 1, end);
+                check(primeOutput.lines().toList().equals(expected.stream().sorted()
+                        .map(prime -> "Found prime " + prime + "!").toList()),
+                        "Buffered records are not sorted prime-only lines");
+            }
             check(output.contains("Elapsed milliseconds:"), "Missing elapsed duration");
         } finally {
             Files.deleteIfExists(outputPath);
@@ -64,8 +70,7 @@ public class VariantEntryPointTest {
         String[][] invalid = {
             {"x 0\ny 10\n", "Worker count must be at least 1."},
             {"x -1\ny 10\n", "Worker count must be at least 1."},
-            {"x 2\ny 0\n", "Search limit must be at least 1."},
-            {"x 2\ny -1\n", "Search limit must be at least 1."},
+            {"x 2\ny -1\n", "Search limit must be at least 0."},
             {"x two\ny 10\n", "must be an integer"},
             {"x 2\ny 2147483648\n", "outside the 32-bit integer range"},
             {"x 2.5\ny 10\n", "must be an integer"},
@@ -82,6 +87,8 @@ public class VariantEntryPointTest {
                 runCase(classPath, config, Set.of(2, 3, 5, 7), null);
                 Files.writeString(config, "x 5\ny 2\n");
                 runCase(classPath, config, Set.of(2), null);
+                Files.writeString(config, "x 3\ny 0\n");
+                runCase(classPath, config, Set.of(), null);
                 Files.writeString(config, "x 3\ny 1\n");
                 runCase(classPath, config, Set.of(), null);
                 for (String[] invalidCase : invalid) {
@@ -98,4 +105,5 @@ public class VariantEntryPointTest {
         System.out.println("PASS: all four entry points, run timestamps, output, empty searches, config errors, exit codes");
     }
 }
+
 

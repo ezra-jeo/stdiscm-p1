@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 
 public class DivisorDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
-    private static final Pattern PRIME = Pattern.compile("found prime number (\\d+)!");
+    private static final Pattern PRIME = Pattern.compile("(?:found prime number |Found prime )(\\d+)!");
 
     @FunctionalInterface
     interface CheckedAction {
@@ -50,8 +50,12 @@ public class DivisorDivisionSchemeTest {
         check(actual.size() == expected.size(), "Duplicate prime records: " + actual);
     }
 
-    // A test harness redirects stdout so we can assert what the user sees.
-    // Compare sets because worker scheduling does not guarantee output order.
+    private static void checkBuffered(String output, Set<Integer> expected) {
+        // Exact lines check sorting, formatting, and absence of ID/timestamp.
+        List<String> expectedLines = expected.stream().sorted()
+                .map(prime -> "Found prime " + prime + "!").toList();
+        check(output.lines().toList().equals(expectedLines), "Incorrect buffered output: " + output);
+    }
     private static void checkSearch(int workers, int limit, Set<Integer> primes) throws Exception {
         for (boolean immediate : new boolean[] {true, false}) {
             PrintingScheme printer = new PrintingScheme(immediate);
@@ -65,6 +69,7 @@ public class DivisorDivisionSchemeTest {
                 check(duringSearch.isEmpty(), "Buffered search printed before display");
                 String displayed = capture(printer::displayBuffer);
                 checkPrimes(displayed, primes);
+                checkBuffered(displayed, primes);
                 check(capture(printer::displayBuffer).equals(displayed),
                         "Displaying the buffer should preserve its contents");
             }
@@ -121,9 +126,8 @@ public class DivisorDivisionSchemeTest {
 
     private static void checkAttribution() throws Exception {
         long coordinatorId = Thread.currentThread().threadId();
-        PrintingScheme printer = new PrintingScheme(false);
-        capture(() -> new DivisorDivisionScheme(3, 5, printer).search());
-        String output = capture(printer::displayBuffer);
+        PrintingScheme printer = new PrintingScheme(true);
+        String output = capture(() -> new DivisorDivisionScheme(3, 5, printer).search());
         String[] lines = output.strip().split("\\R");
         check(lines.length == 3, "Missing prime records");
         for (String line : lines) {
@@ -142,7 +146,7 @@ public class DivisorDivisionSchemeTest {
             nullRejected = true;
         }
         check(nullRejected, "Null printing scheme accepted");
-        int[][] cases = {{0, 2}, {-1, 2}, {2, 0}, {2, -1}};
+        int[][] cases = {{0, 2}, {-1, 2}, {2, -1}};
         for (int[] input : cases) {
             boolean rejected = false;
             try {
@@ -199,6 +203,7 @@ public class DivisorDivisionSchemeTest {
 
     public static void main(String[] args) throws Exception {
         invalidInputs();
+        checkSearch(3, 0, Set.of());
         checkSearch(3, 1, Set.of());
         checkSearch(5, 2, Set.of(2));
         checkSearch(3, 5, Set.of(2, 3, 5));
@@ -224,4 +229,5 @@ public class DivisorDivisionSchemeTest {
         System.out.println("PASS: divisor validation, primes, squares, exact allocation, empty jobs, both modes, repeated runs, timestamps, coordinator attribution, interruption, int boundary");
     }
 }
+
 

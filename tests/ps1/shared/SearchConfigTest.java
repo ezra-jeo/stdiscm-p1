@@ -33,6 +33,9 @@ public class SearchConfigTest {
             SearchConfig small = SearchConfig.load(config);
             check(small.workerCount() == 3 && small.searchLimit() == 1, "Whitespace/sign parsing failed");
 
+            Files.writeString(config, "x 3\ny 0\n");
+            check(SearchConfig.load(config).searchLimit() == 0, "Zero search limit rejected");
+
             String[] wrongTypes = {"two", "true", "null", "2.0", "1e3", "0x10", "1_000", "+", "NaN"};
             String[] overflowValues = {"2147483648", "-2147483649", "9223372036854775807",
                     "9223372036854775808", "999999999999999999999999999999999999999"};
@@ -44,8 +47,12 @@ public class SearchConfigTest {
                 for (String value : overflowValues) {
                     reject(config, other + key + " " + value + "\n", "Config " + key + " on line 2 is outside the 32-bit integer range");
                 }
-                for (String value : new String[] {"0", "-1", "-2147483648"}) {
-                    reject(config, other + key + " " + value + "\n", "must be at least 1");
+                String[] invalidBounds = key.equals("x")
+                        ? new String[] {"0", "-1", "-2147483648"}
+                        : new String[] {"-1", "-2147483648"};
+                String minimum = key.equals("x") ? "1" : "0";
+                for (String value : invalidBounds) {
+                    reject(config, other + key + " " + value + "\n", "must be at least " + minimum);
                 }
             }
             reject(config, "x 3\n", "must contain both x and y");
@@ -58,3 +65,4 @@ public class SearchConfigTest {
         System.out.println("PASS: config data types, positive bounds, int overflow/underflow, huge values, format errors");
     }
 }
+

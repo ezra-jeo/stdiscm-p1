@@ -17,7 +17,6 @@ class SearchDivisionJob implements Runnable {
 
     @Override
     public void run() {
-        long threadId = Thread.currentThread().threadId();
         // Prevent the counter from wrapping after Integer.MAX_VALUE.
         for (long candidate = min; candidate <= max; candidate++) {
             int upperLimit = (int) Math.sqrt(candidate);
@@ -29,10 +28,10 @@ class SearchDivisionJob implements Runnable {
                 }
             }
             if (prime) {
+                long threadId = Thread.currentThread().threadId();
                 LocalTime currTime = LocalTime.now();
-                printingScheme.report("Thread " + threadId 
-                    + " found prime number " + candidate + "!"
-                    + " Timestamp: " + currTime);
+                PrintingSchemeObject message = new PrintingSchemeObject(threadId, (int) candidate, currTime);
+                printingScheme.report(message);
             }
         }
     }
@@ -42,7 +41,7 @@ public class SearchDivisionScheme implements DivisionScheme {
     private final int workerCount;
     private final int searchLimit;
     private final PrintingScheme printingScheme;
-    private final long MIN_CANDIDATE = 0;
+    static final int MIN_CANDIDATE = 0;
 
     public SearchDivisionScheme(int workerCount, int searchLimit, PrintingScheme printingScheme) {
         if (workerCount < 1) {

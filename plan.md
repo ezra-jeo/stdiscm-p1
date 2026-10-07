@@ -38,8 +38,8 @@ create another thread. No separate coordinator thread is needed.
 #### Candidate-range division
 
 - Each worker independently checks the candidates in its assigned range.
-- Planned candidate count is `max(0, y - 1)`: search from 2 through `y`,
-  with no candidates when `y` is 0 or 1.
+- Return before allocating workers when `y < 2`. Otherwise candidate count is
+  `y - 1`: search from 2 through `y`.
 - Base range size is `candidateCount / x`; remainder is `candidateCount % x`.
 - The first remainder-count workers receive one extra candidate each.
 - Start at 2; each subsequent range starts at the previous end plus 1.
@@ -66,10 +66,10 @@ Example: `y = 10`, `x = 3` produces 2–4, 5–7, and 8–10.
 Use one class with a mode fixed at instantiation, rather than a printing strategy
 hierarchy. Share one printing object across workers.
 
-- Planned reporting interface: receive a structured map with thread ID,
+- Reporting receives a `PrintingSchemeObject` record with thread ID,
   confirmation timestamp, and prime number instead of a preformatted string.
-  Each map represents one prime report; thread IDs are metadata, not unique
-  record keys, since one thread can report multiple primes.
+  The typed record replaces the originally proposed map. One thread can report
+  multiple primes without overwriting earlier reports.
 - Immediate mode prints each prime with its thread ID and timestamp when reported.
 - Buffered mode stores records in the printing object's collection and prints
   them after the entire search finishes.
@@ -78,7 +78,7 @@ hierarchy. Share one printing object across workers.
 - Protect complete output records and concurrent buffer additions.
 - Keep prime calculations outside the lock.
 - Workers do not maintain duplicate prime collections.
-- Immediate output order may vary. Planned buffered output sorts records by
+- Immediate output order may vary. Buffered output sorts records by
   numeric prime value in ascending order, then displays only the prime numbers.
 
 Each record contains the prime, reporting thread ID, and timestamp captured when
@@ -86,7 +86,7 @@ the prime is confirmed, not when buffered output is eventually displayed.
 
 Range division records the confirming worker's ID. Divisor division records
 main's ID because main combines findings and confirms the prime. The assignment
-explicitly requires IDs and timestamps for immediate output. Planned buffered
+explicitly requires IDs and timestamps for immediate output. Buffered
 output omits these fields, while retaining them in the structured reports.
 Clarify attribution with the
 instructor if worker IDs specifically are required for divisor division.
@@ -109,10 +109,11 @@ Configuration fields are final; `search()` uses those already-validated values.
 Keep the rules consistent and reject invalid inputs before starting workers.
 
 - `x >= 1`.
-- Planned change: `y >= 0`; negative search limits remain invalid.
+- `y >= 0`; negative search limits remain invalid.
 - `y = 0` and `y = 1` are valid empty searches; start and end timestamps
-  still appear. Planned behavior: both schemes short-circuit with an early
-  return before creating any workers when the search limit is below 2.
+  still appear. Range division returns early; divisor division's loop starts at
+  `FIRST_PRIME_CANDIDATE = 2` and never executes for these limits. Neither
+  creates workers for an empty search.
   Keep `x >= 1` validation even for an empty search.
 - `x > y` is valid: some workers receive empty ranges and do nothing.
 - Detect missing or unreadable configuration and missing or malformed values.
@@ -123,7 +124,7 @@ Keep the rules consistent and reject invalid inputs before starting workers.
 - Config validation distinguishes invalid integer syntax from 32-bit overflow or
   underflow, identifying the key and line. Zero and negative values that fit in
   an int are then checked against each field's allowed minimum: 1 for `x`,
-  planned 0 for `y`.
+  0 for `y`.
 - Values use 32-bit integers, up to `Integer.MAX_VALUE`. Candidate
   counters and range arithmetic use `long` where an increment can exceed that
   bound. This numeric limit does not guarantee feasible runtime or thread counts.
@@ -169,19 +170,18 @@ Compile each variant with `shared/src`; the README documents the command.
 There are no source copies or synchronization script. Include `shared` alongside
 the four variant folders when packaging, since it is their common dependency.
 
-## Implementation To-Do
+## Completed Implementation To-Do
 
-1. Accept search limits 0 and 1. Short-circuit both schemes with an early return
-   before spawning workers; preserve run start/end timestamps. Update config and
-   strategy validation, tests, and README errors. Do not treat 0 or 1 as divisors.
-2. Change printing mode 2 (buffered output, variants 2 and 4) to display primes
-   without thread IDs or timestamps. Keep both fields in immediate output.
-3. Replace string reports with maps containing thread ID, confirmation timestamp,
-   and prime number. Sort buffered records numerically by prime before display;
-   do not parse strings or sort numeric values lexicographically. Update both
-   schemes, printing tests, entry point checks, and output documentation.
+- [x] Accept search limits 0 and 1 without creating workers; preserve run
+  timestamps. Config/strategy validation, tests, and README errors are updated.
+- [x] Buffered output (variants 2 and 4) displays primes without thread IDs or
+  confirmation timestamps. Immediate output keeps both fields.
+- [x] Replace string reports with typed `PrintingSchemeObject` records instead
+  of the originally proposed maps. Sort buffered primes numerically in ascending
+  order. Tests cover deliberately shuffled reports, exact buffered formatting,
+  repeated display, immediate record fields, and all four entry points.
 
-These are pending changes, not claims that the current code implements them.
+Verified with `scripts/verify.ps1`: all config, scheme, and entry point checks pass.
 
 ## Current Deliverable Status
 

@@ -26,8 +26,9 @@ y 100
 
 Use one key and integer per line, separated by whitespace. Blank lines are allowed.
 Both keys are required, once each. Unknown keys and extra tokens are rejected.
-Values must be integers from 1 through 2,147,483,647. `y = 1` is valid and prints
-no primes. `x > y` is valid; some jobs have empty ranges.
+`x` must be an integer from 1 through 2,147,483,647; `y` may also be 0.
+Limits 0 and 1 create no workers and print no primes. `x > y` is valid;
+some jobs have empty ranges when there are candidates to search.
 
 The numeric limit is a representation limit. Available memory and OS thread
 limits can prevent large worker counts from running. Large search limits can
@@ -61,10 +62,10 @@ For `x 3` and `y 10`, the prime records contain 2, 3, 5, and 7 exactly once.
 Each run prints a start timestamp, prime records, an end timestamp, and elapsed
 milliseconds. The elapsed duration includes searching and buffered display.
 
-Each prime record includes its confirming thread ID and confirmation timestamp.
+Immediate prime output includes its confirming thread ID and confirmation timestamp.
 Candidate-range division reports worker IDs. Divisor division reports main's ID
 because main combines the results. Range output order depends on scheduling;
-buffered records retain reporting order and are not sorted.
+buffered output shows only primes, sorted numerically in ascending order.
 
 ## Errors
 
@@ -80,7 +81,7 @@ is rejected before the search starts, so it has no run timestamps.
 | Decimal, text, scientific notation, or other non-integer format | `Config x/y on line N must be an integer; ...` |
 | Integer outside the 32-bit range, including huge values | `Config x/y on line N is outside the 32-bit integer range (-2147483648 to 2147483647).` |
 | `x < 1` | `Worker count must be at least 1.` |
-| `y < 1` | `Search limit must be at least 1.` |
+| `y < 0` | `Search limit must be at least 0.` |
 | More than one command-line argument | `Usage: java -cp out <variant-main> [config-file]` |
 | Interrupted coordinator | `Search interrupted. All started workers have finished.` |
 

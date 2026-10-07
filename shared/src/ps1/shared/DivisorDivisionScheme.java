@@ -39,7 +39,8 @@ public class DivisorDivisionScheme implements DivisionScheme {
     private final int workerCount;
     private final int searchLimit;
     private final PrintingScheme printingScheme;
-    private final long MIN_CANDIDATE = 0;
+    static final int MIN_CANDIDATE = 0;
+    private static final int FIRST_PRIME_CANDIDATE = 2;
 
 
     public DivisorDivisionScheme(int workerCount, int searchLimit, PrintingScheme printingScheme) {
@@ -89,11 +90,7 @@ public class DivisorDivisionScheme implements DivisionScheme {
     @Override 
     public void search() throws InterruptedException {
         // Candidates stay sequential; each gets a fresh batch of workers.
-        for (long candidate = MIN_CANDIDATE; candidate <= searchLimit; candidate++) {
-            if (candidate < 2) {
-                continue; // Skips 0 and 1 since they are non primes regardless
-            }
-
+        for (long candidate = FIRST_PRIME_CANDIDATE; candidate <= searchLimit; candidate++) {
             Map<Thread, DivisorDivisionJob> workers = spawnWorkers((int) candidate);
             try {
                 for (Thread worker: workers.keySet()) {
@@ -124,9 +121,8 @@ public class DivisorDivisionScheme implements DivisionScheme {
             if (prime) {
                 long threadId = Thread.currentThread().threadId();
                 LocalTime currTime = LocalTime.now();
-                printingScheme.report("Thread " + threadId 
-                    + " found prime number " + candidate + "!"
-                    + " Timestamp: " + currTime);
+                PrintingSchemeObject message = new PrintingSchemeObject(threadId, (int) candidate, currTime);
+                printingScheme.report(message);
             }
         }
     }
