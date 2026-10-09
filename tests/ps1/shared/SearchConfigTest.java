@@ -36,7 +36,13 @@ public class SearchConfigTest {
             Files.writeString(config, "x 3\ny 0\n");
             check(SearchConfig.load(config).searchLimit() == 0, "Zero search limit rejected");
 
-            String[] wrongTypes = {"two", "true", "null", "2.0", "1e3", "0x10", "1_000", "+", "NaN"};
+            // Config values are text. Reject formats that are not decimal integers
+            // for both x and y, even when another language accepts them as numbers.
+            String[] wrongTypes = {
+                    "two", "true", "false", "null", "2.0", "-2.5", "1e3",
+                    "0x10", "0b10", "1_000", "1,000", "+", "-", "++2", "+-2",
+                    "NaN", "Infinity", "-Infinity", "[]", "[1,2]", "{}", "\"2\""
+            };
             String[] overflowValues = {"2147483648", "-2147483649", "9223372036854775807",
                     "9223372036854775808", "999999999999999999999999999999999999999"};
             for (String key : new String[] {"x", "y"}) {

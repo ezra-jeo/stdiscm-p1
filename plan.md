@@ -183,6 +183,14 @@ the four variant folders when packaging, since it is their common dependency.
 
 Verified with `scripts/verify.ps1`: all config, scheme, and entry point checks pass.
 
+## Pending Implementation To-Do
+
+- [ ] Change B2 (divisor division) to reuse worker threads across candidates
+  instead of creating a fresh batch for each candidate. Apply to both printing
+  modes. Reset per-candidate findings, wait for all divisor checks before
+  confirming each prime, and shut down/join all workers before search returns.
+  Update tests and performance notes for the new worker lifecycle.
+
 ## Current Deliverable Status
 
 - Complete: four variant source folders and thin main entry points.
