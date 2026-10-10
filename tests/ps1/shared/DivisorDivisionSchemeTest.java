@@ -1,6 +1,5 @@
 package ps1.shared;
 
-import java.math.BigInteger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -23,8 +22,8 @@ public class DivisorDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
     private static final Pattern PRIME = Pattern.compile("(?:found prime number |Found prime )(\\d+)!");
 
-    private static BigInteger number(long value) {
-        return BigInteger.valueOf(value);
+    private static long number(long value) {
+        return value;
     }
 
     @FunctionalInterface
@@ -85,7 +84,7 @@ public class DivisorDivisionSchemeTest {
     // Reflection verifies exact allocation without exposing production internals.
     private static void checkAllocation(int candidate, int workerCount, int upperLimit) throws Exception {
         DivisorDivisionScheme scheme = new DivisorDivisionScheme(number(workerCount), number(candidate), new PrintingScheme(true));
-        Method spawn = DivisorDivisionScheme.class.getDeclaredMethod("spawnWorkers", BigInteger.class);
+        Method spawn = DivisorDivisionScheme.class.getDeclaredMethod("spawnWorkers", long.class);
         spawn.setAccessible(true);
         Map<?, ?> workers = (Map<?, ?>) spawn.invoke(scheme, number(candidate));
         check(workers.size() == workerCount, "Incorrect worker count");

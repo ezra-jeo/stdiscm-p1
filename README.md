@@ -5,10 +5,10 @@ Both values come from a separate config file.
 
 | Folder | Division | Printing |
 | --- | --- | --- |
-| `variant1-range-immediate` | Candidate ranges | Immediate |
-| `variant2-range-buffered` | Candidate ranges | After all workers finish |
-| `variant3-divisor-immediate` | Divisor ranges per candidate | Immediate |
-| `variant4-divisor-buffered` | Divisor ranges per candidate | After the entire search |
+| `variant1-range-immediate` | SearchDivision | Immediate |
+| `variant2-range-buffered` | SearchDivision | After all workers finish |
+| `variant3-divisor-immediate` | DivisorDivision | Immediate |
+| `variant4-divisor-buffered` | DivisorDivision | After the entire search |
 
 ## Requirements
 
@@ -26,9 +26,10 @@ y 100
 
 Use one key and integer per line, separated by whitespace. Blank lines are allowed.
 Both keys are required, once each. Unknown keys and extra tokens are rejected.
-`x` must be an integer from 1 through 18,446,744,073,709,551,615;
-`y` may range from 0 through the same uint64 maximum.
-Both use `BigInteger` with explicit uint64 bounds, so values above signed `long` max stay positive.
+`x` must be an integer from 1 through 9,223,372,036,854,775,807;
+`y` may range from 0 through the same maximum.
+Both use signed 64-bit Java `long`, as permitted by the instructor with proper validation.
+Values outside the signed 64-bit range are rejected before searching.
 Limits 0 and 1 create no workers and print no primes. `x > y` is valid;
 some jobs have empty ranges when there are candidates to search.
 
@@ -65,7 +66,7 @@ Each run prints a start timestamp, prime records, an end timestamp, and elapsed
 milliseconds. The elapsed duration includes searching and buffered display.
 
 Immediate prime output includes its confirming thread ID and confirmation timestamp.
-Candidate-range division reports worker IDs. Divisor division reports main's ID
+SearchDivision reports worker IDs. DivisorDivision reports main's ID
 because main combines the results. Range output order depends on scheduling;
 buffered output shows only primes, sorted numerically in ascending order.
 
@@ -81,7 +82,7 @@ is rejected before the search starts, so it has no run timestamps.
 | Repeated key | `Duplicate config value: x.` or `y.` |
 | Unknown key, missing value, extra tokens, or `x=2` format | `Config line N must be x <integer> or y <integer>.` |
 | Decimal, text, scientific notation, or other non-integer format | `Config x/y on line N must be an integer; ...` |
-| Integer above uint64 max, including huge values | `Config x/y on line N is outside the uint64 range (0 to 18446744073709551615).` |
+| Integer outside signed 64-bit range, including huge values | `Config x/y on line N is outside the signed 64-bit range (-9223372036854775808 to 9223372036854775807).` |
 | `x < 1` | `Worker count must be at least 1.` |
 | `y < 0` | `Search limit must be at least 0.` |
 | More than one command-line argument | `Usage: java -cp out <variant-main> [config-file]` |
@@ -110,8 +111,8 @@ Run all checks from the project root:
 ```
 
 Verification compiles each variant with shared source, runs the two
-scheme test sets, config validation tests, and uint64 boundary tests, and checks the entry points with valid and invalid config files.
-The audit accepts formerly out-of-int values and rejects uint64 max + 1. High-boundary checks test parsing, exact square roots, divisor allocation, reports, and short composite jobs; they do not run a full search to uint64 max.
+scheme test sets, config validation tests, and signed 64-bit boundary tests, and checks the entry points with valid and invalid config files.
+The audit accepts values above int max and rejects values outside signed long bounds. High-boundary checks test parsing, exact square roots, divisor allocation, reports, and short composite jobs; they do not run a full search to Long.MAX_VALUE.
 Build output goes into a unique temporary directory. Assertion failures or
 nonzero exit codes fail the verification script.
 
@@ -120,8 +121,9 @@ nonzero exit codes fail the verification script.
 Source, four entry points, separate configs, compile instructions, and automated
 checks are present. See `plan.md` for the completeness audit.
 
-The video, presentation slides, performance measurements, and submission ZIP
-remain. Include `shared` alongside the four variant folders in the ZIP, since
+Measured performance results are in `reports/performance/README.md`; the updated
+editable deck is `presentation/Basic-Threading-Signed64.pptx`. The video and
+submission ZIP remain. Include `shared` alongside the four variant folders in the ZIP, since
 all four depend on it. Include their source, config, and README. Exclude compiled `.class`
 files and `out` folders. Old root `.class` files are not used by these builds.
 

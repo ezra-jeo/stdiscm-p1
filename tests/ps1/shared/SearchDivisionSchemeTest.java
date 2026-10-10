@@ -1,6 +1,5 @@
 package ps1.shared;
 
-import java.math.BigInteger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -21,8 +20,8 @@ public class SearchDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
     private static final Pattern PRIME = Pattern.compile("(?:found prime number |Found prime )(\\d+)!");
 
-    private static BigInteger number(long value) {
-        return BigInteger.valueOf(value);
+    private static long number(long value) {
+        return value;
     }
 
     @FunctionalInterface

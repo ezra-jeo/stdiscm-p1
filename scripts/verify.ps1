@@ -20,7 +20,7 @@ $testSources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tests') -Re
 & javac -d $testRoot @sharedSources @testSources
 if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
 $testClassPath = $testRoot
-foreach ($testName in @('SearchConfigTest', 'SearchDivisionSchemeTest', 'DivisorDivisionSchemeTest', 'UInt64BoundaryTest')) {
+foreach ($testName in @('SearchConfigTest', 'SearchDivisionSchemeTest', 'DivisorDivisionSchemeTest', 'Signed64BoundaryTest')) {
     & java -cp $testClassPath "ps1.shared.$testName"
     if ($LASTEXITCODE -ne 0) { throw "Test failed: $testName" }
 }

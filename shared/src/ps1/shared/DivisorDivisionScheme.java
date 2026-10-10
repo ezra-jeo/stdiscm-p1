@@ -1,6 +1,5 @@
 package ps1.shared;
 
-import java.math.BigInteger;
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -9,11 +8,11 @@ import java.util.Set;
 class DivisorDivisionJob implements Runnable {
     private final long min;
     private final long max;
-    private final BigInteger candidate;
+    private final long candidate;
     private boolean foundDivisor;
 
-    DivisorDivisionJob(long min, long max, BigInteger candidate) {
-        // Divisors stop at sqrt(uint64 max), which fits safely in a long.
+    DivisorDivisionJob(long min, long max, long candidate) {
+        // Divisors stop at sqrt(Long.MAX_VALUE), which fits safely in a long.
         this.min = min;
         this.max = max;
         this.candidate = candidate;
@@ -23,7 +22,7 @@ class DivisorDivisionJob implements Runnable {
     @Override
     public void run() {
         for (long divisor = min; divisor <= max; divisor++) {
-            if (candidate.mod(BigInteger.valueOf(divisor)).signum() == 0) {
+            if (candidate % divisor == 0) {
                 this.foundDivisor = true;
                 return;
             }
@@ -36,11 +35,11 @@ class DivisorDivisionJob implements Runnable {
 }
 
 public class DivisorDivisionScheme implements DivisionScheme {
-    private final BigInteger workerCount;
-    private final BigInteger searchLimit;
+    private final long workerCount;
+    private final long searchLimit;
     private final PrintingScheme printingScheme;
 
-    public DivisorDivisionScheme(BigInteger workerCount, BigInteger searchLimit, PrintingScheme printingScheme) {
+    public DivisorDivisionScheme(long workerCount, long searchLimit, PrintingScheme printingScheme) {
         new SearchConfig(workerCount, searchLimit); // Same bounds as config loading.
         if (printingScheme == null) {
             throw new IllegalArgumentException("Printing Scheme cannot be null.");
@@ -50,17 +49,17 @@ public class DivisorDivisionScheme implements DivisionScheme {
         this.printingScheme = printingScheme;
     }
 
-    private Map<Thread, DivisorDivisionJob> spawnWorkers(BigInteger candidate) {
+    private Map<Thread, DivisorDivisionJob> spawnWorkers(long candidate) {
         // Split 2 through sqrt(candidate). Keep jobs to read after joining.
         Map<Thread, DivisorDivisionJob> threadMap = new HashMap<>();
-        long upperLimit = candidate.sqrt().longValueExact();
-        BigInteger divisorCount = BigInteger.valueOf(upperLimit - 1);
-        BigInteger[] division = divisorCount.divideAndRemainder(workerCount);
+        long upperLimit = floorSqrt(candidate);
+        long divisorCount = upperLimit - 1;
+        long countPerWorker = divisorCount / workerCount;
+        long remainder = divisorCount % workerCount;
         long nextMin = 2;
 
-        for (BigInteger index = BigInteger.ZERO; index.compareTo(workerCount) < 0;
-                index = index.add(BigInteger.ONE)) {
-            long count = division[0].longValueExact() + (index.compareTo(division[1]) < 0 ? 1 : 0);
+        for (long index = 0; index < workerCount; index++) {
+            long count = countPerWorker + (index < remainder ? 1 : 0);
             long max = nextMin + count - 1;
             long jobMin = count == 0 ? 2 : nextMin;
             long jobMax = count == 0 ? 1 : max;
@@ -72,11 +71,19 @@ public class DivisorDivisionScheme implements DivisionScheme {
         return threadMap;
     }
 
+    static long floorSqrt(long candidate) {
+        long root = (long) Math.sqrt(candidate);
+        // Correct floating-point rounding without overflowing root * root.
+        while (root > candidate / root) root--;
+        while (root + 1 <= candidate / (root + 1)) root++;
+        return root;
+    }
+
     @Override 
     public void search() throws InterruptedException {
         // Candidates stay sequential; each gets a fresh batch of workers.
-        for (BigInteger candidate = BigInteger.TWO; candidate.compareTo(searchLimit) <= 0;
-                candidate = candidate.add(BigInteger.ONE)) {
+        for (long offset = 1; offset < searchLimit; offset++) {
+            long candidate = offset + 1;
             Map<Thread, DivisorDivisionJob> workers = spawnWorkers(candidate);
             try {
                 for (Thread worker: workers.keySet()) {

@@ -1,6 +1,5 @@
 package ps1.shared;
 
-import java.math.BigInteger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,17 +25,17 @@ public class SearchConfigTest {
         Path config = Files.createTempFile("ps1-config-validation-", ".txt");
         try {
             // Check parsing separately; do not start billions of workers.
-            Files.writeString(config, "x 18446744073709551615\ny 18446744073709551615\n");
+            Files.writeString(config, "x 9223372036854775807\ny 9223372036854775807\n");
             SearchConfig maximum = SearchConfig.load(config);
-            check(maximum.workerCount().equals(SearchConfig.MAX_UINT64), "Maximum x rejected or changed");
-            check(maximum.searchLimit().equals(SearchConfig.MAX_UINT64), "Maximum y rejected or changed");
+            check(maximum.workerCount() == Long.MAX_VALUE, "Maximum x rejected or changed");
+            check(maximum.searchLimit() == Long.MAX_VALUE, "Maximum y rejected or changed");
 
             Files.writeString(config, "\ny\t1\nx +0003\n\n");
             SearchConfig small = SearchConfig.load(config);
-            check(small.workerCount().equals(BigInteger.valueOf(3)) && small.searchLimit().equals(BigInteger.ONE), "Whitespace/sign parsing failed");
+            check(small.workerCount() == 3 && small.searchLimit() == 1, "Whitespace/sign parsing failed");
 
             Files.writeString(config, "x 3\ny 0\n");
-            check(SearchConfig.load(config).searchLimit().equals(BigInteger.ZERO), "Zero search limit rejected");
+            check(SearchConfig.load(config).searchLimit() == 0, "Zero search limit rejected");
 
             // Config values are text. Reject formats that are not decimal integers
             // for both x and y, even when another language accepts them as numbers.
@@ -45,7 +44,7 @@ public class SearchConfigTest {
                     "0x10", "0b10", "1_000", "1,000", "+", "-", "++2", "+-2",
                     "NaN", "Infinity", "-Infinity", "[]", "[1,2]", "{}", "\"2\""
             };
-            String[] overflowValues = {"18446744073709551616", "18446744073709551617",
+            String[] overflowValues = {"9223372036854775808", "9223372036854775809",
                     "999999999999999999999999999999999999999"};
             for (String key : new String[] {"x", "y"}) {
                 String other = key.equals("x") ? "y 10\n" : "x 3\n";
@@ -53,7 +52,7 @@ public class SearchConfigTest {
                     reject(config, other + key + " " + value + "\n", "Config " + key + " on line 2 must be an integer");
                 }
                 for (String value : overflowValues) {
-                    reject(config, other + key + " " + value + "\n", "Config " + key + " on line 2 is outside the uint64 range");
+                    reject(config, other + key + " " + value + "\n", "Config " + key + " on line 2 is outside the signed 64-bit range");
                 }
                 String[] invalidBounds = key.equals("x")
                         ? new String[] {"0", "-1", "-2147483648"}
@@ -70,7 +69,7 @@ public class SearchConfigTest {
         } finally {
             Files.deleteIfExists(config);
         }
-        System.out.println("PASS: config data types, positive bounds, uint64 bounds, huge values, format errors");
+        System.out.println("PASS: config data types, positive bounds, signed 64-bit bounds, huge values, format errors");
     }
 }
 
