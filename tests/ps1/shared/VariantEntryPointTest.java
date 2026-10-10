@@ -72,13 +72,13 @@ public class VariantEntryPointTest {
             {"x -1\ny 10\n", "Worker count must be at least 1."},
             {"x 2\ny -1\n", "Search limit must be at least 0."},
             {"x two\ny 10\n", "must be an integer"},
-            {"x 2\ny 2147483648\n", "outside the 32-bit integer range"},
+            {"x 2\ny 18446744073709551616\n", "outside the uint64 range"},
             {"x 2.5\ny 10\n", "must be an integer"},
             {"x false\ny 10\n", "must be an integer"},
             {"x 2\ny null\n", "must be an integer"},
             {"x 2\ny 3.0\n", "must be an integer"},
             {"x 2\ny 1e3\n", "must be an integer"},
-            {"x 2147483648\ny 10\n", "outside the 32-bit integer range"},
+            {"x 18446744073709551616\ny 10\n", "outside the uint64 range"},
             {"x 2\n", "must contain both x and y"},
             {"", "must contain both x and y"},
             {"x 2\nx 3\ny 10\n", "Duplicate config value"},
@@ -94,6 +94,10 @@ public class VariantEntryPointTest {
                 Files.writeString(config, "x 3\ny 0\n");
                 runCase(classPath, config, Set.of(), null);
                 Files.writeString(config, "x 3\ny 1\n");
+                runCase(classPath, config, Set.of(), null);
+                Files.writeString(config, "x 18446744073709551615\ny 0\n");
+                runCase(classPath, config, Set.of(), null);
+                Files.writeString(config, "x 18446744073709551615\ny 1\n");
                 runCase(classPath, config, Set.of(), null);
                 for (String[] invalidCase : invalid) {
                     Files.writeString(config, invalidCase[0]);

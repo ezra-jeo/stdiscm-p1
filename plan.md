@@ -121,17 +121,17 @@ Keep the rules consistent and reject invalid inputs before starting workers.
 - Config uses one `x <integer>` and one `y <integer>` line; blank lines are allowed.
   Missing keys, duplicate keys, unknown keys, extra tokens, and malformed numbers
   are rejected. Errors are documented in `README.md`.
-- Config validation distinguishes invalid integer syntax from 32-bit overflow or
-  underflow, identifying the key and line. Zero and negative values that fit in
-  an int are then checked against each field's allowed minimum: 1 for `x`,
-  0 for `y`.
-- Values use 32-bit integers, up to `Integer.MAX_VALUE`. Candidate
-  counters and range arithmetic use `long` where an increment can exceed that
-  bound. This numeric limit does not guarantee feasible runtime or thread counts.
-- Counter proposal: Java has no primitive unsigned int. Unsigned `Integer`
-  helpers reinterpret int bits but do not prevent increment overflow. Keep the
-  existing long counters for int-bounded inputs unless an alternative endpoint
-  termination strategy is explicitly chosen; no counter changes are implemented.
+- Config validation distinguishes invalid integer syntax from values above uint64
+  max, identifying the key and line. Negative values are rejected against each
+  field's minimum: 1 for x and 0 for y. Decimals are never rounded or coerced.
+- Both x and y are BigInteger values bounded by uint64 max:
+  18,446,744,073,709,551,615. Candidate counters, range endpoints, and prime
+  records also use BigInteger, including increments past the final endpoint.
+- Divisor bounds use the exact BigInteger.sqrt() result, converted with
+  longValueExact(). The largest checked divisor is 4,294,967,295, so divisor
+  loops fit in signed long. No floating-point roots or int narrowing are used.
+- This numeric limit does not guarantee feasible thread counts or runtime.
+  Do not attempt full maximum-input searches in boundary tests.
 - Null printing dependencies are rejected in strategy constructors. OS thread
   and memory limits can still cause startup failures.
 
@@ -172,6 +172,8 @@ the four variant folders when packaging, since it is their common dependency.
 
 ## Completed Implementation To-Do
 
+- [x] Allow both x and y through uint64 max using bounded BigInteger; update
+  allocation, candidate counters, reporting, validation matrices, and boundary tests.
 - [x] Accept search limits 0 and 1 without creating workers; preserve run
   timestamps. Config/strategy validation, tests, and README errors are updated.
 - [x] Buffered output (variants 2 and 4) displays primes without thread IDs or
@@ -181,7 +183,7 @@ the four variant folders when packaging, since it is their common dependency.
   order. Tests cover deliberately shuffled reports, exact buffered formatting,
   repeated display, immediate record fields, and all four entry points.
 
-Verified with `scripts/verify.ps1`: all config, scheme, and entry point checks pass.
+Verified with `scripts/verify.ps1`: all config, scheme, uint64 boundary, and entry point checks pass; the updated validation audit passed 605 scenarios.
 
 ## Pending Implementation To-Do
 

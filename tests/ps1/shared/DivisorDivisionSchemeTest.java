@@ -1,5 +1,7 @@
 package ps1.shared;
 
+import java.math.BigInteger;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
@@ -20,6 +22,10 @@ import java.util.regex.Pattern;
 public class DivisorDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
     private static final Pattern PRIME = Pattern.compile("(?:found prime number |Found prime )(\\d+)!");
+
+    private static BigInteger number(long value) {
+        return BigInteger.valueOf(value);
+    }
 
     @FunctionalInterface
     interface CheckedAction {
@@ -59,7 +65,7 @@ public class DivisorDivisionSchemeTest {
     private static void checkSearch(int workers, int limit, Set<Integer> primes) throws Exception {
         for (boolean immediate : new boolean[] {true, false}) {
             PrintingScheme printer = new PrintingScheme(immediate);
-            DivisorDivisionScheme scheme = new DivisorDivisionScheme(workers, limit, printer);
+            DivisorDivisionScheme scheme = new DivisorDivisionScheme(number(workers), number(limit), printer);
 
             DivisionScheme division = scheme;
             String duringSearch = capture(division::search);
@@ -78,10 +84,10 @@ public class DivisorDivisionSchemeTest {
 
     // Reflection verifies exact allocation without exposing production internals.
     private static void checkAllocation(int candidate, int workerCount, int upperLimit) throws Exception {
-        DivisorDivisionScheme scheme = new DivisorDivisionScheme(workerCount, candidate, new PrintingScheme(true));
-        Method spawn = DivisorDivisionScheme.class.getDeclaredMethod("spawnWorkers", int.class);
+        DivisorDivisionScheme scheme = new DivisorDivisionScheme(number(workerCount), number(candidate), new PrintingScheme(true));
+        Method spawn = DivisorDivisionScheme.class.getDeclaredMethod("spawnWorkers", BigInteger.class);
         spawn.setAccessible(true);
-        Map<?, ?> workers = (Map<?, ?>) spawn.invoke(scheme, candidate);
+        Map<?, ?> workers = (Map<?, ?>) spawn.invoke(scheme, number(candidate));
         check(workers.size() == workerCount, "Incorrect worker count");
         Field minField = DivisorDivisionJob.class.getDeclaredField("min");
         Field maxField = DivisorDivisionJob.class.getDeclaredField("max");
@@ -99,9 +105,9 @@ public class DivisorDivisionSchemeTest {
             check(entry.getValue() instanceof DivisorDivisionJob, "Missing job");
             Object job = entry.getValue();
             check(jobs.add(job), "Jobs shared across workers");
-            check(candidateField.getInt(job) == candidate, "Wrong candidate passed to job");
-            int min = minField.getInt(job);
-            int max = maxField.getInt(job);
+            check(candidateField.get(job).equals(number(candidate)), "Wrong candidate passed to job");
+            int min = Math.toIntExact(minField.getLong(job));
+            int max = Math.toIntExact(maxField.getLong(job));
             int size = Math.max(0, max - min + 1);
             smallest = Math.min(smallest, size);
             largest = Math.max(largest, size);
@@ -115,7 +121,7 @@ public class DivisorDivisionSchemeTest {
     }
 
     private static void checkJob(int min, int max, int candidate, boolean expected) throws Exception {
-        DivisorDivisionJob job = new DivisorDivisionJob(min, max, candidate);
+        DivisorDivisionJob job = new DivisorDivisionJob(min, max, number(candidate));
         check(!job.getFoundDivisor(), "Job must begin with no finding");
         Thread thread = new Thread(job);
         thread.start();
@@ -127,7 +133,7 @@ public class DivisorDivisionSchemeTest {
     private static void checkAttribution() throws Exception {
         long coordinatorId = Thread.currentThread().threadId();
         PrintingScheme printer = new PrintingScheme(true);
-        String output = capture(() -> new DivisorDivisionScheme(3, 5, printer).search());
+        String output = capture(() -> new DivisorDivisionScheme(number(3), number(5), printer).search());
         String[] lines = output.strip().split("\\R");
         check(lines.length == 3, "Missing prime records");
         for (String line : lines) {
@@ -141,7 +147,7 @@ public class DivisorDivisionSchemeTest {
     private static void invalidInputs() {
         boolean nullRejected = false;
         try {
-            new DivisorDivisionScheme(2, 10, null);
+            new DivisorDivisionScheme(number(2), number(10), null);
         } catch (IllegalArgumentException expected) {
             nullRejected = true;
         }
@@ -150,7 +156,7 @@ public class DivisorDivisionSchemeTest {
         for (int[] input : cases) {
             boolean rejected = false;
             try {
-                new DivisorDivisionScheme(input[0], input[1], new PrintingScheme(true));
+                new DivisorDivisionScheme(number(input[0]), number(input[1]), new PrintingScheme(true));
             } catch (IllegalArgumentException expected) {
                 rejected = true;
             }
@@ -220,7 +226,7 @@ public class DivisorDivisionSchemeTest {
         checkJob(2, 2, 6, true);
         checkJob(3, 3, 9, true);
         checkJob(2, 46340, Integer.MAX_VALUE, false);
-        DivisionScheme reusable = new DivisorDivisionScheme(3, 10, new PrintingScheme(true));
+        DivisionScheme reusable = new DivisorDivisionScheme(number(3), number(10), new PrintingScheme(true));
         for (int run = 0; run < 10; run++) {
             checkPrimes(capture(reusable::search), Set.of(2, 3, 5, 7));
         }

@@ -26,7 +26,9 @@ y 100
 
 Use one key and integer per line, separated by whitespace. Blank lines are allowed.
 Both keys are required, once each. Unknown keys and extra tokens are rejected.
-`x` must be an integer from 1 through 2,147,483,647; `y` may also be 0.
+`x` must be an integer from 1 through 18,446,744,073,709,551,615;
+`y` may range from 0 through the same uint64 maximum.
+Both use `BigInteger` with explicit uint64 bounds, so values above signed `long` max stay positive.
 Limits 0 and 1 create no workers and print no primes. `x > y` is valid;
 some jobs have empty ranges when there are candidates to search.
 
@@ -79,7 +81,7 @@ is rejected before the search starts, so it has no run timestamps.
 | Repeated key | `Duplicate config value: x.` or `y.` |
 | Unknown key, missing value, extra tokens, or `x=2` format | `Config line N must be x <integer> or y <integer>.` |
 | Decimal, text, scientific notation, or other non-integer format | `Config x/y on line N must be an integer; ...` |
-| Integer outside the 32-bit range, including huge values | `Config x/y on line N is outside the 32-bit integer range (-2147483648 to 2147483647).` |
+| Integer above uint64 max, including huge values | `Config x/y on line N is outside the uint64 range (0 to 18446744073709551615).` |
 | `x < 1` | `Worker count must be at least 1.` |
 | `y < 0` | `Search limit must be at least 0.` |
 | More than one command-line argument | `Usage: java -cp out <variant-main> [config-file]` |
@@ -108,7 +110,8 @@ Run all checks from the project root:
 ```
 
 Verification compiles each variant with shared source, runs the two
-scheme test sets and config validation tests, and checks the entry points with valid and invalid config files.
+scheme test sets, config validation tests, and uint64 boundary tests, and checks the entry points with valid and invalid config files.
+The audit accepts formerly out-of-int values and rejects uint64 max + 1. High-boundary checks test parsing, exact square roots, divisor allocation, reports, and short composite jobs; they do not run a full search to uint64 max.
 Build output goes into a unique temporary directory. Assertion failures or
 nonzero exit codes fail the verification script.
 

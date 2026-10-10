@@ -1,19 +1,19 @@
 package ps1.shared;
 
+import java.math.BigInteger;
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-
 class DivisorDivisionJob implements Runnable {
-    private final int min;
-    private final int max;
-    private final int candidate;
+    private final long min;
+    private final long max;
+    private final BigInteger candidate;
     private boolean foundDivisor;
 
-    DivisorDivisionJob(int min, int max, int candidate) {
-        // Min and Max provided here should already be computed as a subset of 2 - sqrt(candidate)
+    DivisorDivisionJob(long min, long max, BigInteger candidate) {
+        // Divisors stop at sqrt(uint64 max), which fits safely in a long.
         this.min = min;
         this.max = max;
         this.candidate = candidate;
@@ -23,7 +23,7 @@ class DivisorDivisionJob implements Runnable {
     @Override
     public void run() {
         for (long divisor = min; divisor <= max; divisor++) {
-            if (candidate % divisor == 0) {
+            if (candidate.mod(BigInteger.valueOf(divisor)).signum() == 0) {
                 this.foundDivisor = true;
                 return;
             }
@@ -36,62 +36,48 @@ class DivisorDivisionJob implements Runnable {
 }
 
 public class DivisorDivisionScheme implements DivisionScheme {
-    private final int workerCount;
-    private final int searchLimit;
+    private final BigInteger workerCount;
+    private final BigInteger searchLimit;
     private final PrintingScheme printingScheme;
-    static final int MIN_CANDIDATE = 0;
-    private static final int FIRST_PRIME_CANDIDATE = 2;
 
-
-    public DivisorDivisionScheme(int workerCount, int searchLimit, PrintingScheme printingScheme) {
-        if (workerCount < 1) {
-            throw new IllegalArgumentException("Worker count must be at least 1.");
-        }
-        if (searchLimit < MIN_CANDIDATE) {
-            throw new IllegalArgumentException("Search limit must be at least " + MIN_CANDIDATE + ".");
-        }
+    public DivisorDivisionScheme(BigInteger workerCount, BigInteger searchLimit, PrintingScheme printingScheme) {
+        new SearchConfig(workerCount, searchLimit); // Same bounds as config loading.
         if (printingScheme == null) {
             throw new IllegalArgumentException("Printing Scheme cannot be null.");
         }
-
         this.workerCount = workerCount;
         this.searchLimit = searchLimit;
         this.printingScheme = printingScheme;
     }
 
-    private Map<Thread, DivisorDivisionJob> spawnWorkers(int candidate) {
+    private Map<Thread, DivisorDivisionJob> spawnWorkers(BigInteger candidate) {
         // Split 2 through sqrt(candidate). Keep jobs to read after joining.
         Map<Thread, DivisorDivisionJob> threadMap = new HashMap<>();
-
-        int upperLimit = (int) Math.sqrt(candidate);
-        int divisorCount = upperLimit - 1;// -1 so we don't count 1 as divisor and check of it.
-        int countPerWorker = divisorCount / workerCount; // Floors automatically
-        int remainder = divisorCount % workerCount;
+        long upperLimit = candidate.sqrt().longValueExact();
+        BigInteger divisorCount = BigInteger.valueOf(upperLimit - 1);
+        BigInteger[] division = divisorCount.divideAndRemainder(workerCount);
         long nextMin = 2;
 
-        for (int index = 0; index < workerCount; index++) {
-            int count = countPerWorker + (index < remainder ? 1 : 0);
+        for (BigInteger index = BigInteger.ZERO; index.compareTo(workerCount) < 0;
+                index = index.add(BigInteger.ONE)) {
+            long count = division[0].longValueExact() + (index.compareTo(division[1]) < 0 ? 1 : 0);
             long max = nextMin + count - 1;
-            // Canonical empty endpoints avoid overflowing after the final int.
-            int jobMin = count == 0 ? 2 : (int) nextMin;
-            int jobMax = count == 0 ? 1 : (int) max;
-            
-            //System.out.println("Thread " + index + " gets " + jobMin + " to " + jobMax);
+            long jobMin = count == 0 ? 2 : nextMin;
+            long jobMax = count == 0 ? 1 : max;
             DivisorDivisionJob divisorJob = new DivisorDivisionJob(jobMin, jobMax, candidate);
             Thread thread = new Thread(divisorJob);
             threadMap.put(thread, divisorJob);
-
             nextMin = max + 1;
         }
-
         return threadMap;
     }
 
     @Override 
     public void search() throws InterruptedException {
         // Candidates stay sequential; each gets a fresh batch of workers.
-        for (long candidate = FIRST_PRIME_CANDIDATE; candidate <= searchLimit; candidate++) {
-            Map<Thread, DivisorDivisionJob> workers = spawnWorkers((int) candidate);
+        for (BigInteger candidate = BigInteger.TWO; candidate.compareTo(searchLimit) <= 0;
+                candidate = candidate.add(BigInteger.ONE)) {
+            Map<Thread, DivisorDivisionJob> workers = spawnWorkers(candidate);
             try {
                 for (Thread worker: workers.keySet()) {
                     worker.start();
@@ -121,7 +107,7 @@ public class DivisorDivisionScheme implements DivisionScheme {
             if (prime) {
                 long threadId = Thread.currentThread().threadId();
                 LocalTime currTime = LocalTime.now();
-                PrintingSchemeObject message = new PrintingSchemeObject(threadId, (int) candidate, currTime);
+                PrintingSchemeObject message = new PrintingSchemeObject(threadId, candidate, currTime);
                 printingScheme.report(message);
             }
         }

@@ -27,7 +27,8 @@ Optional config path:
 java -cp out ps1.variant1.Main "C:/path/to/config.txt"
 ```
 
-`x` must be an integer from 1 through 2,147,483,647; `y` may also be 0. Limits 0 and 1 are valid
+`x` must be an integer from 1 through 18,446,744,073,709,551,615;
+`y` may range from 0 through the same uint64 maximum. Values use bounded `BigInteger`, not signed `long`. Limits 0 and 1 are valid
 with no workers or primes. More workers than candidates or divisors is valid. Large worker
 counts can exceed memory or OS thread limits; large searches can be slow.
 

@@ -1,15 +1,16 @@
 package ps1.shared;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalTime;
 
 class SearchDivisionJob implements Runnable {
-    private final int min;
-    private final int max;
+    private final BigInteger min;
+    private final BigInteger max;
     private final PrintingScheme printingScheme;
 
-    SearchDivisionJob(int min, int max, PrintingScheme printingScheme) {
+    SearchDivisionJob(BigInteger min, BigInteger max, PrintingScheme printingScheme) {
         this.min = min;
         this.max = max;
         this.printingScheme = printingScheme; // Validated in composing class.
@@ -17,12 +18,13 @@ class SearchDivisionJob implements Runnable {
 
     @Override
     public void run() {
-        // Prevent the counter from wrapping after Integer.MAX_VALUE.
-        for (long candidate = min; candidate <= max; candidate++) {
-            int upperLimit = (int) Math.sqrt(candidate);
-            boolean prime = candidate >= 2;
-            for (int divisor = 2; divisor <= upperLimit; divisor++) {
-                if (candidate % divisor == 0) {
+        // BigInteger can step past uint64 max without wrapping back to zero.
+        for (BigInteger candidate = min; candidate.compareTo(max) <= 0;
+                candidate = candidate.add(BigInteger.ONE)) {
+            long upperLimit = candidate.sqrt().longValueExact();
+            boolean prime = candidate.compareTo(BigInteger.TWO) >= 0;
+            for (long divisor = 2; divisor <= upperLimit; divisor++) {
+                if (candidate.mod(BigInteger.valueOf(divisor)).signum() == 0) {
                     prime = false;
                     break;
                 }
@@ -30,7 +32,7 @@ class SearchDivisionJob implements Runnable {
             if (prime) {
                 long threadId = Thread.currentThread().threadId();
                 LocalTime currTime = LocalTime.now();
-                PrintingSchemeObject message = new PrintingSchemeObject(threadId, (int) candidate, currTime);
+                PrintingSchemeObject message = new PrintingSchemeObject(threadId, candidate, currTime);
                 printingScheme.report(message);
             }
         }
@@ -38,22 +40,15 @@ class SearchDivisionJob implements Runnable {
 }
 
 public class SearchDivisionScheme implements DivisionScheme {
-    private final int workerCount;
-    private final int searchLimit;
+    private final BigInteger workerCount;
+    private final BigInteger searchLimit;
     private final PrintingScheme printingScheme;
-    static final int MIN_CANDIDATE = 0;
 
-    public SearchDivisionScheme(int workerCount, int searchLimit, PrintingScheme printingScheme) {
-        if (workerCount < 1) {
-            throw new IllegalArgumentException("Worker count must be at least 1.");
-        }
-        if (searchLimit < MIN_CANDIDATE) {
-            throw new IllegalArgumentException("Search limit must be at least " + MIN_CANDIDATE + ".");
-        }
+    public SearchDivisionScheme(BigInteger workerCount, BigInteger searchLimit, PrintingScheme printingScheme) {
+        new SearchConfig(workerCount, searchLimit); // Same bounds as config loading.
         if (printingScheme == null) {
             throw new IllegalArgumentException("Printing Scheme cannot be null.");
         }
-
         this.workerCount = workerCount;
         this.searchLimit = searchLimit;
         this.printingScheme = printingScheme;
@@ -62,29 +57,26 @@ public class SearchDivisionScheme implements DivisionScheme {
     private List<Thread> spawnWorkers() {
         // Split candidates evenly. First workers get the remainder.
         List<Thread> workers = new ArrayList<>();
-        int candidateCount = searchLimit - 1;
-        int countPerWorker = candidateCount / workerCount;
-        int remainder = candidateCount % workerCount;
-        long nextMin = 2;
-        
-        for (int index = 0; index < workerCount; index++) {
-            int count = countPerWorker + (index < remainder ? 1 : 0);
-            long max = nextMin + count - 1;
-            // Canonical empty endpoints avoid overflowing after the final int.
-            int jobMin = count == 0 ? 2 : (int) nextMin;
-            int jobMax = count == 0 ? 1 : (int) max;
-            
-            //System.out.println("Thread " + index + " gets " + jobMin + " to " + jobMax);
-            
+        BigInteger candidateCount = searchLimit.subtract(BigInteger.ONE);
+        BigInteger[] division = candidateCount.divideAndRemainder(workerCount);
+        BigInteger nextMin = BigInteger.TWO;
+
+        for (BigInteger index = BigInteger.ZERO; index.compareTo(workerCount) < 0;
+                index = index.add(BigInteger.ONE)) {
+            BigInteger count = division[0].add(index.compareTo(division[1]) < 0
+                    ? BigInteger.ONE : BigInteger.ZERO);
+            BigInteger max = nextMin.add(count).subtract(BigInteger.ONE);
+            BigInteger jobMin = count.signum() == 0 ? BigInteger.TWO : nextMin;
+            BigInteger jobMax = count.signum() == 0 ? BigInteger.ONE : max;
             workers.add(new Thread(new SearchDivisionJob(jobMin, jobMax, this.printingScheme)));
-            nextMin = max + 1;
+            nextMin = max.add(BigInteger.ONE);
         }
         return workers;
     }
 
     @Override
     public void search() throws InterruptedException {
-        if (searchLimit < 2) {
+        if (searchLimit.compareTo(BigInteger.TWO) < 0) {
            return; // Skips 0 and 1 since they are non primes regardless
         }
 

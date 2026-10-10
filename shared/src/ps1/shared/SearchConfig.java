@@ -1,25 +1,34 @@
 package ps1.shared;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-public record SearchConfig(int workerCount, int searchLimit) {
-    private static final int MIN_CANDIDATE = 0;
+public record SearchConfig(BigInteger workerCount, BigInteger searchLimit) {
+    public static final BigInteger MAX_UINT64 = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
 
     public SearchConfig {
-        if (workerCount < 1) {
-            throw new IllegalArgumentException("Worker count must be at least 1.");
+        validate(workerCount, BigInteger.ONE, "Worker count");
+        validate(searchLimit, BigInteger.ZERO, "Search limit");
+    }
+
+    private static void validate(BigInteger value, BigInteger minimum, String field) {
+        if (value == null) {
+            throw new IllegalArgumentException(field + " cannot be null.");
         }
-        if (searchLimit < MIN_CANDIDATE) {
-            throw new IllegalArgumentException("Search limit must be at least " + MIN_CANDIDATE + ".");
+        if (value.compareTo(minimum) < 0) {
+            throw new IllegalArgumentException(field + " must be at least " + minimum + ".");
+        }
+        if (value.compareTo(MAX_UINT64) > 0) {
+            throw new IllegalArgumentException(field + " must be at most " + MAX_UINT64 + ".");
         }
     }
 
     public static SearchConfig load(Path path) throws IOException {
-        Map<String, Integer> values = new HashMap<>();
+        Map<String, BigInteger> values = new HashMap<>();
         int lineNumber = 0;
         for (String line : Files.readAllLines(path)) {
             lineNumber++;
@@ -42,20 +51,18 @@ public record SearchConfig(int workerCount, int searchLimit) {
         return new SearchConfig(values.get("x"), values.get("y"));
     }
 
-    private static int parseInteger(String key, String value, int lineNumber) {
-        // Check the written value before checking if it fits in an int.
+    private static BigInteger parseInteger(String key, String value, int lineNumber) {
+        // Check written syntax first. Never round or coerce decimals.
         if (!value.matches("[+-]?[0-9]+")) {
             throw new IllegalArgumentException("Config " + key + " on line " + lineNumber
                     + " must be an integer; decimals, text, and other number formats are not allowed.");
         }
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException overflow) {
-            // parseInt rejects overflow instead of wrapping the input value.
+        BigInteger number = new BigInteger(value);
+        if (number.compareTo(MAX_UINT64) > 0) {
             throw new IllegalArgumentException("Config " + key + " on line " + lineNumber
-                    + " is outside the 32-bit integer range ("
-                    + Integer.MIN_VALUE + " to " + Integer.MAX_VALUE + ").", overflow);
+                    + " is outside the uint64 range (0 to " + MAX_UINT64 + ").");
         }
+        // Negative values get the same field-specific minimum errors as before.
+        return number;
     }
 }
-

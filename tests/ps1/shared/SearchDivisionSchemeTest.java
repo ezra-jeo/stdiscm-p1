@@ -1,5 +1,7 @@
 package ps1.shared;
 
+import java.math.BigInteger;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
@@ -18,6 +20,10 @@ import java.util.regex.Pattern;
 public class SearchDivisionSchemeTest {
     private static final long TIMEOUT_SECONDS = 5;
     private static final Pattern PRIME = Pattern.compile("(?:found prime number |Found prime )(\\d+)!");
+
+    private static BigInteger number(long value) {
+        return BigInteger.valueOf(value);
+    }
 
     @FunctionalInterface
     interface CheckedAction {
@@ -57,7 +63,7 @@ public class SearchDivisionSchemeTest {
 
     private static void checkStructuredReports() throws Exception {
         LocalTime timestamp = LocalTime.of(12, 34, 56);
-        PrintingSchemeObject report = new PrintingSchemeObject(7, 23, timestamp);
+        PrintingSchemeObject report = new PrintingSchemeObject(7, number(23), timestamp);
         PrintingScheme immediate = new PrintingScheme(true);
         String output = capture(() -> immediate.report(report));
         check(output.lines().toList().equals(List.of(
@@ -67,8 +73,8 @@ public class SearchDivisionSchemeTest {
         PrintingScheme buffered = new PrintingScheme(false);
         check(capture(() -> {
             buffered.report(report);
-            buffered.report(new PrintingSchemeObject(7, 2, timestamp));
-            buffered.report(new PrintingSchemeObject(8, 11, timestamp));
+            buffered.report(new PrintingSchemeObject(7, number(2), timestamp));
+            buffered.report(new PrintingSchemeObject(8, number(11), timestamp));
         }).isEmpty(), "Buffered reporting printed immediately");
         // Deliberately out of order; numeric sorting differs from string sorting.
         checkBuffered(capture(buffered::displayBuffer), Set.of(2, 11, 23));
@@ -78,7 +84,7 @@ public class SearchDivisionSchemeTest {
     private static void checkSearch(int workers, int limit, Set<Integer> primes) throws Exception {
         for (boolean immediate : new boolean[] {true, false}) {
             PrintingScheme printer = new PrintingScheme(immediate);
-            SearchDivisionScheme scheme = new SearchDivisionScheme(workers, limit, printer);
+            SearchDivisionScheme scheme = new SearchDivisionScheme(number(workers), number(limit), printer);
             if (limit >= 2) checkWorkerCreation(scheme, workers);
             DivisionScheme division = scheme;
             String duringSearch = capture(division::search);
@@ -115,7 +121,7 @@ public class SearchDivisionSchemeTest {
     private static void invalidInputs() {
         boolean nullRejected = false;
         try {
-            new SearchDivisionScheme(2, 10, null);
+            new SearchDivisionScheme(number(2), number(10), null);
         } catch (IllegalArgumentException expected) {
             nullRejected = true;
         }
@@ -124,7 +130,7 @@ public class SearchDivisionSchemeTest {
         for (int[] input : cases) {
             boolean rejected = false;
             try {
-                new SearchDivisionScheme(input[0], input[1], new PrintingScheme(true));
+                new SearchDivisionScheme(number(input[0]), number(input[1]), new PrintingScheme(true));
             } catch (IllegalArgumentException expected) {
                 rejected = true;
             }
@@ -179,7 +185,7 @@ public class SearchDivisionSchemeTest {
         AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread worker = new Thread(() -> {
             try {
-                new SearchDivisionJob(Integer.MAX_VALUE, Integer.MAX_VALUE, new PrintingScheme(true)).run();
+                new SearchDivisionJob(number(Integer.MAX_VALUE), number(Integer.MAX_VALUE), new PrintingScheme(true)).run();
             } catch (Throwable error) {
                 failure.set(error);
             }
@@ -204,8 +210,8 @@ public class SearchDivisionSchemeTest {
         checkSearch(2, 6, Set.of(2, 3, 5));
         checkSearch(3, 10, Set.of(2, 3, 5, 7));
         checkSearch(4, 49, Set.of(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47));
-        checkPrimes(capture(() -> new SearchDivisionJob(3, 2, new PrintingScheme(true)).run()), Set.of());
-        DivisionScheme reusable = new SearchDivisionScheme(3, 10, new PrintingScheme(true));
+        checkPrimes(capture(() -> new SearchDivisionJob(number(3), number(2), new PrintingScheme(true)).run()), Set.of());
+        DivisionScheme reusable = new SearchDivisionScheme(number(3), number(10), new PrintingScheme(true));
         for (int run = 0; run < 10; run++) {
             checkPrimes(capture(reusable::search), Set.of(2, 3, 5, 7));
         }
