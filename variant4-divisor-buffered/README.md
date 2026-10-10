@@ -27,8 +27,8 @@ Optional config path:
 java -cp out ps1.variant4.Main "C:/path/to/config.txt"
 ```
 
-`x` must be an integer from 1 through 18,446,744,073,709,551,615;
-`y` may range from 0 through the same uint64 maximum. Values use bounded `BigInteger`, not signed `long`. Limits 0 and 1 are valid
+`x` must be an integer from 1 through 9,223,372,036,854,775,807;
+`y` may range from 0 through the same signed 64-bit maximum. Values use Java `long`, as permitted with proper input validation. Limits 0 and 1 are valid
 with no workers or primes. More workers than candidates or divisors is valid. Large worker
 counts can exceed memory or OS thread limits; large searches can be slow.
 
@@ -37,8 +37,8 @@ non-integers, out-of-range integers, and values below their minimum (`x < 1`, `y
 `Error: ...` message and exit code 1 before searching. Use `x 3`, not `x=3`.
 Only one optional command-line argument is accepted.
 
-Immediate output runs on the confirming thread. Candidate-range variants report
-worker IDs; divisor variants report main's ID because main confirms primality.
+Immediate output runs on the confirming thread. SearchDivision variants report
+worker IDs; DivisorDivision variants report main's ID because main confirms primality.
 If main is interrupted, started workers finish before the failure is reported;
 buffered records are not displayed on that path. JVM resource errors propagate.
 

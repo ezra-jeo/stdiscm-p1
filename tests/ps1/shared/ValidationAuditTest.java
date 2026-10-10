@@ -1,6 +1,5 @@
 package ps1.shared;
 
-import java.math.BigInteger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -14,11 +13,7 @@ public class ValidationAuditTest {
     private static final long TIMEOUT_SECONDS = 10;
     private static final List<String> evidence = new ArrayList<>();
 
-    private record ConfigCase(String name, String contents, String error, BigInteger x, BigInteger y) {
-        ConfigCase(String name, String contents, String error, long x, long y) {
-            this(name, contents, error, BigInteger.valueOf(x), BigInteger.valueOf(y));
-        }
-    }
+    private record ConfigCase(String name, String contents, String error, long x, long y) {}
 
     private static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
@@ -43,8 +38,8 @@ public class ValidationAuditTest {
         cases.add(new ConfigCase("maximum int", "x 2147483647\ny 2147483647\n", null, Integer.MAX_VALUE, Integer.MAX_VALUE));
         cases.add(new ConfigCase("below maximum int", "x 2147483646\ny 2147483646\n", null, Integer.MAX_VALUE - 1, Integer.MAX_VALUE - 1));
         for (String value : new String[] {"2147483648", "4294967295", "9223372036854775807",
-                "9223372036854775808", "18446744073709551614", "18446744073709551615"}) {
-            BigInteger number = new BigInteger(value);
+                "9223372036854775806"}) {
+            long number = Long.parseLong(value);
             cases.add(new ConfigCase("wide integer " + value, "x " + value + "\ny " + value + "\n", null, number, number));
         }
         String[] nonIntegers = {"hello", "true", "false", "null", "2.0", "3.5", "-3.5", ".5", "5.",
@@ -53,12 +48,13 @@ public class ValidationAuditTest {
                 "\u0662", "\uff12", "\u22122", "2\u0000", "2\u00a0"};
         for (String key : new String[] {"x", "y"}) {
             for (String value : nonIntegers) addInvalid(cases, key, value, "must be an integer");
-            for (String value : new String[] {"18446744073709551616", "18446744073709551617",
+            for (String value : new String[] {"9223372036854775808", "18446744073709551615",
                     "999999999999999999999999999999999999999"}) {
-                addInvalid(cases, key, value, "outside the uint64 range");
+                addInvalid(cases, key, value, "outside the signed 64-bit range");
             }
-            String[] negative = key.equals("x") ? new String[] {"0", "-0", "-1", "-2147483648", "-2147483649", "-18446744073709551616"}
-                    : new String[] {"-1", "-2147483648", "-2147483649", "-18446744073709551616"};
+            addInvalid(cases, key, "-9223372036854775809", "outside the signed 64-bit range");
+            String[] negative = key.equals("x") ? new String[] {"0", "-0", "-1", "-2147483648", "-2147483649", "-9223372036854775808"}
+                    : new String[] {"-1", "-2147483648", "-2147483649", "-9223372036854775808"};
             for (String value : negative) addInvalid(cases, key, value, "must be at least " + (key.equals("x") ? "1" : "0"));
         }
         String[][] structure = {
@@ -97,7 +93,7 @@ public class ValidationAuditTest {
         try {
             SearchConfig loaded = SearchConfig.load(config);
             check(test.error() == null, "Invalid input accepted: " + test.name());
-            check(loaded.workerCount().equals(test.x()) && loaded.searchLimit().equals(test.y()), "Input changed: " + test.name());
+            check(loaded.workerCount() == test.x() && loaded.searchLimit() == test.y(), "Input changed: " + test.name());
         } catch (IllegalArgumentException error) {
             check(test.error() != null && error.getMessage().contains(test.error()), "Wrong rejection: " + test.name() + ": " + error);
         }
@@ -160,7 +156,7 @@ public class ValidationAuditTest {
                 String classPath = args[index];
                 for (ConfigCase test : cases) {
                     // Maximum values are representation tests, not resource tests.
-                    if (test.error() == null && (test.x().compareTo(BigInteger.valueOf(5)) > 0 || test.y().compareTo(BigInteger.TEN) > 0)) continue;
+                    if (test.error() == null && (test.x() > 5 || test.y() > 10)) continue;
                     Files.writeString(config, test.contents());
                     checkProcess(classPath, directory, test.name(), test.error(), config.toString());
                 }

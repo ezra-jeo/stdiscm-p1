@@ -4,7 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -14,9 +13,9 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class UInt64BoundaryTest {
-    private static final BigInteger MAX = new BigInteger("18446744073709551615");
-    private static final long MAX_DIVISOR = 4294967295L;
+public class Signed64BoundaryTest {
+    private static final long MAX = Long.MAX_VALUE;
+    private static final long MAX_DIVISOR = 3037000499L;
 
     private static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
@@ -32,30 +31,27 @@ public class UInt64BoundaryTest {
     }
 
     private static void constructorBounds() throws Exception {
-        BigInteger tooLarge = MAX.add(BigInteger.ONE);
-        for (BigInteger invalid : new BigInteger[] {null, BigInteger.valueOf(-1), BigInteger.ZERO, tooLarge}) {
-            rejects(() -> new SearchConfig(invalid, BigInteger.TEN));
-            rejects(() -> new SearchDivisionScheme(invalid, BigInteger.TEN, new PrintingScheme(true)));
-            rejects(() -> new DivisorDivisionScheme(invalid, BigInteger.TEN, new PrintingScheme(true)));
+        for (long invalid : new long[] {-1, 0}) {
+            rejects(() -> new SearchConfig(invalid, 10));
+            rejects(() -> new SearchDivisionScheme(invalid, 10, new PrintingScheme(true)));
+            rejects(() -> new DivisorDivisionScheme(invalid, 10, new PrintingScheme(true)));
         }
-        for (BigInteger invalid : new BigInteger[] {null, BigInteger.valueOf(-1), tooLarge}) {
-            rejects(() -> new SearchConfig(BigInteger.ONE, invalid));
-            rejects(() -> new SearchDivisionScheme(BigInteger.ONE, invalid, new PrintingScheme(true)));
-            rejects(() -> new DivisorDivisionScheme(BigInteger.ONE, invalid, new PrintingScheme(true)));
-        }
+        rejects(() -> new SearchConfig(1, -1));
+        rejects(() -> new SearchDivisionScheme(1, -1, new PrintingScheme(true)));
+        rejects(() -> new DivisorDivisionScheme(1, -1, new PrintingScheme(true)));
         new SearchConfig(MAX, MAX);
-        new SearchDivisionScheme(BigInteger.ONE, MAX, new PrintingScheme(true));
-        new DivisorDivisionScheme(BigInteger.ONE, MAX, new PrintingScheme(true));
+        new SearchDivisionScheme(1, MAX, new PrintingScheme(true));
+        new DivisorDivisionScheme(1, MAX, new PrintingScheme(true));
         // Huge worker counts are harmless for an empty search: no allocation.
-        for (BigInteger limit : new BigInteger[] {BigInteger.ZERO, BigInteger.ONE}) {
+        for (long limit : new long[] {0, 1}) {
             new SearchDivisionScheme(MAX, limit, new PrintingScheme(true)).search();
             new DivisorDivisionScheme(MAX, limit, new PrintingScheme(true)).search();
         }
     }
 
-    private static void divisorAllocation(BigInteger candidate, long expectedRoot) throws Exception {
-        DivisorDivisionScheme scheme = new DivisorDivisionScheme(BigInteger.valueOf(3), candidate, new PrintingScheme(true));
-        Method spawn = DivisorDivisionScheme.class.getDeclaredMethod("spawnWorkers", BigInteger.class);
+    private static void divisorAllocation(long candidate, long expectedRoot) throws Exception {
+        DivisorDivisionScheme scheme = new DivisorDivisionScheme(3, candidate, new PrintingScheme(true));
+        Method spawn = DivisorDivisionScheme.class.getDeclaredMethod("spawnWorkers", long.class);
         spawn.setAccessible(true);
         Map<?, ?> workers = (Map<?, ?>) spawn.invoke(scheme, candidate);
         Field min = DivisorDivisionJob.class.getDeclaredField("min");
@@ -87,7 +83,7 @@ public class UInt64BoundaryTest {
         Thread worker = new Thread(() -> {
             try {
                 // Both are composite; this tests termination at the maximum cheaply.
-                new SearchDivisionJob(MAX.subtract(BigInteger.ONE), MAX, new PrintingScheme(true)).run();
+                new SearchDivisionJob(MAX - 1, MAX, new PrintingScheme(true)).run();
             } catch (Throwable error) {
                 failure.set(error);
             }
@@ -103,9 +99,9 @@ public class UInt64BoundaryTest {
         }
         check(failure.get() == null, "High candidate job failed: " + failure.get());
         check(bytes.size() == 0, "Composite maximum candidates reported as primes");
-        DivisorDivisionJob job = new DivisorDivisionJob(MAX_DIVISOR, MAX_DIVISOR, MAX);
+        DivisorDivisionJob job = new DivisorDivisionJob(MAX_DIVISOR, MAX_DIVISOR, MAX_DIVISOR * MAX_DIVISOR);
         job.run();
-        check(job.getFoundDivisor(), "Divisor above int max was narrowed or miscomputed");
+        check(job.getFoundDivisor(), "Wide divisor was narrowed or miscomputed");
         DivisorDivisionJob empty = new DivisorDivisionJob(2, 1, MAX);
         empty.run();
         check(!empty.getFoundDivisor(), "Empty high-candidate job found a divisor");
@@ -113,12 +109,12 @@ public class UInt64BoundaryTest {
 
     private static void wideReports() {
         // Report formatting is independent of primality; use numeric boundary values.
-        BigInteger aboveSigned = BigInteger.ONE.shiftLeft(63);
+        long belowMax = MAX - 1;
         PrintingScheme buffered = new PrintingScheme(false);
         LocalTime timestamp = LocalTime.NOON;
         buffered.report(new PrintingSchemeObject(1, MAX, timestamp));
-        buffered.report(new PrintingSchemeObject(2, aboveSigned, timestamp));
-        buffered.report(new PrintingSchemeObject(3, BigInteger.TWO, timestamp));
+        buffered.report(new PrintingSchemeObject(2, belowMax, timestamp));
+        buffered.report(new PrintingSchemeObject(3, 2, timestamp));
         PrintStream original = System.out;
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (PrintStream output = new PrintStream(bytes, true, StandardCharsets.UTF_8)) {
@@ -129,19 +125,19 @@ public class UInt64BoundaryTest {
             System.setOut(original);
         }
         check(bytes.toString(StandardCharsets.UTF_8).lines().toList().equals(List.of(
-                "Found prime 2!", "Found prime 9223372036854775808!", "Found prime 18446744073709551615!",
-                "Thread 7 found prime number 18446744073709551615! Timestamp: 12:00")),
+                "Found prime 2!", "Found prime 9223372036854775806!", "Found prime 9223372036854775807!",
+                "Thread 7 found prime number 9223372036854775807! Timestamp: 12:00")),
                 "Wide reports were narrowed, misformatted, or sorted incorrectly");
     }
 
     public static void main(String[] args) throws Exception {
         constructorBounds();
         divisorAllocation(MAX, MAX_DIVISOR);
-        BigInteger square = BigInteger.valueOf(MAX_DIVISOR).pow(2);
+        long square = MAX_DIVISOR * MAX_DIVISOR;
         divisorAllocation(square, MAX_DIVISOR);
-        divisorAllocation(square.subtract(BigInteger.ONE), MAX_DIVISOR - 1);
+        divisorAllocation(square - 1, MAX_DIVISOR - 1);
         highCandidateJobs();
         wideReports();
-        System.out.println("PASS: uint64 constructors, empty searches, exact roots, wide divisors, maximum-loop termination, report sorting");
+        System.out.println("PASS: signed 64-bit constructors, empty searches, exact roots, wide divisors, maximum-loop termination, report sorting");
     }
 }

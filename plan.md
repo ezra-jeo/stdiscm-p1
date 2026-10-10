@@ -15,10 +15,10 @@ Produce four variants:
 
 | Variant | Division | Printing |
 | --- | --- | --- |
-| 1 | Candidate ranges | Immediate |
-| 2 | Candidate ranges | Buffered |
-| 3 | Divisor checks per candidate | Immediate |
-| 4 | Divisor checks per candidate | Buffered |
+| 1 | SearchDivision | Immediate |
+| 2 | SearchDivision | Buffered |
+| 3 | DivisorDivision | Immediate |
+| 4 | DivisorDivision | Buffered |
 
 ## Agreed Architecture
 
@@ -35,7 +35,7 @@ Each strategy creates, starts, coordinates, and joins its workers. Coordination
 executes on the application main thread; creating a strategy object does not
 create another thread. No separate coordinator thread is needed.
 
-#### Candidate-range division
+#### SearchDivision
 
 - Each worker independently checks the candidates in its assigned range.
 - Return before allocating workers when `y < 2`. Otherwise candidate count is
@@ -49,7 +49,7 @@ create another thread. No separate coordinator thread is needed.
 
 Example: `y = 10`, `x = 3` produces 2–4, 5–7, and 8–10.
 
-#### Divisor division
+#### DivisorDivision
 
 - Process candidate numbers sequentially.
 - For each candidate, divide its necessary divisor checks among workers.
@@ -84,12 +84,12 @@ hierarchy. Share one printing object across workers.
 Each record contains the prime, reporting thread ID, and timestamp captured when
 the prime is confirmed, not when buffered output is eventually displayed.
 
-Range division records the confirming worker's ID. Divisor division records
+SearchDivision records the confirming worker's ID. DivisorDivision records
 main's ID because main combines findings and confirms the prime. The assignment
 explicitly requires IDs and timestamps for immediate output. Buffered
 output omits these fields, while retaining them in the structured reports.
 Clarify attribution with the
-instructor if worker IDs specifically are required for divisor division.
+instructor if worker IDs specifically are required for DivisorDivision.
 
 ### Main entry points
 
@@ -111,7 +111,7 @@ Keep the rules consistent and reject invalid inputs before starting workers.
 - `x >= 1`.
 - `y >= 0`; negative search limits remain invalid.
 - `y = 0` and `y = 1` are valid empty searches; start and end timestamps
-  still appear. Range division returns early; divisor division's loop starts at
+  still appear. SearchDivision returns early; DivisorDivision's loop starts at
   `FIRST_PRIME_CANDIDATE = 2` and never executes for these limits. Neither
   creates workers for an empty search.
   Keep `x >= 1` validation even for an empty search.
@@ -121,15 +121,17 @@ Keep the rules consistent and reject invalid inputs before starting workers.
 - Config uses one `x <integer>` and one `y <integer>` line; blank lines are allowed.
   Missing keys, duplicate keys, unknown keys, extra tokens, and malformed numbers
   are rejected. Errors are documented in `README.md`.
-- Config validation distinguishes invalid integer syntax from values above uint64
-  max, identifying the key and line. Negative values are rejected against each
-  field's minimum: 1 for x and 0 for y. Decimals are never rounded or coerced.
-- Both x and y are BigInteger values bounded by uint64 max:
-  18,446,744,073,709,551,615. Candidate counters, range endpoints, and prime
-  records also use BigInteger, including increments past the final endpoint.
-- Divisor bounds use the exact BigInteger.sqrt() result, converted with
-  longValueExact(). The largest checked divisor is 4,294,967,295, so divisor
-  loops fit in signed long. No floating-point roots or int narrowing are used.
+- Config validation distinguishes invalid integer syntax from values outside signed
+  64-bit bounds, identifying the key and line. Representable negative values are
+  rejected against field minimums: 1 for x and 0 for y. Decimals are never coerced.
+- Both x and y use signed Java long, as permitted by the instructor with proper
+  input validation. Maximum: 9,223,372,036,854,775,807 (Long.MAX_VALUE).
+  Candidate counters, range endpoints, and prime records also use long.
+- Candidate loops use offset + 1 with offset < searchLimit, so the offset reaches
+  the maximum without stepping past it. Allocation avoids max + 1 at the final range.
+- SearchDivision checks divisor <= candidate / divisor to avoid multiplication
+  overflow. DivisorDivision corrects Math.sqrt rounding using integer division;
+  its maximum divisor is 3,037,000,499.
 - This numeric limit does not guarantee feasible thread counts or runtime.
   Do not attempt full maximum-input searches in boundary tests.
 - Null printing dependencies are rejected in strategy constructors. OS thread
@@ -172,8 +174,8 @@ the four variant folders when packaging, since it is their common dependency.
 
 ## Completed Implementation To-Do
 
-- [x] Allow both x and y through uint64 max using bounded BigInteger; update
-  allocation, candidate counters, reporting, validation matrices, and boundary tests.
+- [x] Use signed long for x/y, counters, endpoints, and reports; document instructor
+  permission, validate parsing bounds, and verify maximum endpoints without overflow.
 - [x] Accept search limits 0 and 1 without creating workers; preserve run
   timestamps. Config/strategy validation, tests, and README errors are updated.
 - [x] Buffered output (variants 2 and 4) displays primes without thread IDs or
@@ -183,11 +185,11 @@ the four variant folders when packaging, since it is their common dependency.
   order. Tests cover deliberately shuffled reports, exact buffered formatting,
   repeated display, immediate record fields, and all four entry points.
 
-Verified with `scripts/verify.ps1`: all config, scheme, uint64 boundary, and entry point checks pass; the updated validation audit passed 605 scenarios.
+Verified with `scripts/verify.ps1`: all config, scheme, signed 64-bit boundary, and entry point checks pass; 613 signed 64-bit validation audit cases pass.
 
 ## Pending Implementation To-Do
 
-- [ ] Change B2 (divisor division) to reuse worker threads across candidates
+- [ ] Change B2 (DivisorDivision) to reuse worker threads across candidates
   instead of creating a fresh batch for each candidate. Apply to both printing
   modes. Reset per-candidate findings, wait for all divisor checks before
   confirming each prime, and shut down/join all workers before search returns.
@@ -205,8 +207,10 @@ Verified with `scripts/verify.ps1`: all config, scheme, uint64 boundary, and ent
 - Verification limitation: candidate-range tests check primes and worker counts,
   not exact composite-candidate coverage. Divisor tests check exact allocation.
   Startup resource failures and worker exception propagation are not covered.
-- Remaining: performance data and analysis, video demonstration, presentation
-  slides, and final submission ZIP. ZIP the four variant folders and their
+- Complete: matched-config performance data and analysis in `reports/performance`;
+  19-slide monochrome deck with current source panels and editable graphs in
+  `presentation/Basic-Threading-Signed64.pptx`. Benchmarks verify all prime outputs.
+- Remaining: video demonstration and final submission ZIP. ZIP the four variant folders and their
   required `shared` folder; exclude compiled output.
 - Instructor clarification remains: divisor output attributes confirmation to
   main. Verify whether the instructor expects divisor-worker IDs instead.

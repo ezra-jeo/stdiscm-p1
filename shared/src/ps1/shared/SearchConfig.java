@@ -1,34 +1,27 @@
 package ps1.shared;
 
 import java.io.IOException;
-import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-public record SearchConfig(BigInteger workerCount, BigInteger searchLimit) {
-    public static final BigInteger MAX_UINT64 = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
+public record SearchConfig(long workerCount, long searchLimit) {
+    public static final long MAX_VALUE = Long.MAX_VALUE;
 
     public SearchConfig {
-        validate(workerCount, BigInteger.ONE, "Worker count");
-        validate(searchLimit, BigInteger.ZERO, "Search limit");
+        validate(workerCount, 1, "Worker count");
+        validate(searchLimit, 0, "Search limit");
     }
 
-    private static void validate(BigInteger value, BigInteger minimum, String field) {
-        if (value == null) {
-            throw new IllegalArgumentException(field + " cannot be null.");
-        }
-        if (value.compareTo(minimum) < 0) {
+    private static void validate(long value, long minimum, String field) {
+        if (value < minimum) {
             throw new IllegalArgumentException(field + " must be at least " + minimum + ".");
-        }
-        if (value.compareTo(MAX_UINT64) > 0) {
-            throw new IllegalArgumentException(field + " must be at most " + MAX_UINT64 + ".");
         }
     }
 
     public static SearchConfig load(Path path) throws IOException {
-        Map<String, BigInteger> values = new HashMap<>();
+        Map<String, Long> values = new HashMap<>();
         int lineNumber = 0;
         for (String line : Files.readAllLines(path)) {
             lineNumber++;
@@ -51,18 +44,17 @@ public record SearchConfig(BigInteger workerCount, BigInteger searchLimit) {
         return new SearchConfig(values.get("x"), values.get("y"));
     }
 
-    private static BigInteger parseInteger(String key, String value, int lineNumber) {
+    private static long parseInteger(String key, String value, int lineNumber) {
         // Check written syntax first. Never round or coerce decimals.
         if (!value.matches("[+-]?[0-9]+")) {
             throw new IllegalArgumentException("Config " + key + " on line " + lineNumber
                     + " must be an integer; decimals, text, and other number formats are not allowed.");
         }
-        BigInteger number = new BigInteger(value);
-        if (number.compareTo(MAX_UINT64) > 0) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException error) {
             throw new IllegalArgumentException("Config " + key + " on line " + lineNumber
-                    + " is outside the uint64 range (0 to " + MAX_UINT64 + ").");
+                    + " is outside the signed 64-bit range (" + Long.MIN_VALUE + " to " + MAX_VALUE + ").", error);
         }
-        // Negative values get the same field-specific minimum errors as before.
-        return number;
     }
 }
